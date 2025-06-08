@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Zap, Filter, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar'; // Added SidebarProvider
+import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar';
 
 const categories = Array.from(new Set(mockProducts.map(p => p.category)));
 
@@ -23,7 +23,7 @@ export default function ProductsPage() {
   const initialCategory = searchParams.get('category');
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
+  const [selectedCategory, setSelectedCategory] = useState('all'); // Default to 'all'
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
   const [productStatus, setProductStatus] = useState<'all' | 'new' | 'old'>('all');
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
@@ -31,8 +31,12 @@ export default function ProductsPage() {
   useEffect(() => {
     if (initialCategory) {
       setSelectedCategory(initialCategory);
+    } else {
+      // If no initialCategory, ensure it's set to 'all' or a sensible default
+      // This might already be handled by useState, but being explicit can help
+      setSelectedCategory('all');
     }
-  }, [initialCategory]);
+  }, [initialCategory]); // Added initialCategory to dependency array
 
   const filteredProducts = useMemo(() => {
     return mockProducts.filter(product => {
@@ -124,7 +128,7 @@ export default function ProductsPage() {
         <Button variant="outline" onClick={() => setIsFilterSidebarOpen(true)} className="w-full">
           <Filter className="mr-2 h-5 w-5" /> Show Filters
         </Button>
-        <SidebarProvider>
+        <SidebarProvider> {/* Ensure SidebarProvider wraps the Sidebar component */}
           <Sidebar open={isFilterSidebarOpen} onOpenChange={setIsFilterSidebarOpen} side="left" variant='sidebar' collapsible='offcanvas'>
               <SidebarHeader className="flex justify-between items-center p-4 border-b">
                 <h3 className="text-xl font-headline font-semibold flex items-center">
@@ -181,4 +185,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-
