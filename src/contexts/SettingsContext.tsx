@@ -112,7 +112,6 @@ export function SettingsProvider({
           if (!parsedSettings.pages) {
             parsedSettings.pages = [];
           } else {
-            // Ensure all pages have a suggestedLayout array and props object for each component
             parsedSettings.pages = parsedSettings.pages.map((page: PageConfig) => ({
               ...page,
               suggestedLayout: (page.suggestedLayout || []).map((component: PageComponent) => ({
@@ -225,40 +224,31 @@ export function SettingsProvider({
 
   const updatePage = (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => {
     setSettingsState(prev => {
-      const newPagesArray = prev.pages?.map(page => {
+      const newPagesArray = (prev.pages || []).map(page => {
         if (page.id === pageId) {
-          // Start with the original page data
-          let updatedPageData = { ...page };
-
-          // Apply all updates EXCEPT suggestedLayout for now
-          for (const key in updates) {
-            if (key !== 'suggestedLayout' && key !== 'id' && key !== 'createdAt' && key !== 'updatedAt') {
-              (updatedPageData as any)[key] = (updates as any)[key];
-            }
-          }
-          
-          // Determine the source for the layout: from updates if provided, else from current page
-          const layoutSource = updates.suggestedLayout !== undefined 
-            ? updates.suggestedLayout 
-            : page.suggestedLayout;
-
-          // Ensure all components in the final layout have their props initialized.
-          const finalSuggestedLayout = (layoutSource || []).map(comp => ({
+          // Create the updated page by merging current page with all updates.
+          // If 'updates' includes 'suggestedLayout', it will overwrite the one from 'page'.
+          const newPageData = {
+            ...page,
+            ...updates, 
+            updatedAt: new Date().toISOString(),
+          };
+  
+          // Ensure the final suggestedLayout (whether from 'updates' or original 'page')
+          // has props initialized for each component.
+          newPageData.suggestedLayout = (newPageData.suggestedLayout || []).map(comp => ({
             ...comp,
             props: comp.props || { placeholderContent: `Content for ${comp.type}` }
           }));
-
-          // Assign the processed layout and update timestamp
-          updatedPageData.suggestedLayout = finalSuggestedLayout;
-          updatedPageData.updatedAt = new Date().toISOString();
           
-          return updatedPageData;
+          return newPageData;
         }
         return page;
       });
       return { ...prev, pages: newPagesArray };
     });
   };
+  
 
   const getPageBySlug = (slug: string): PageConfig | undefined => {
     return settings.pages?.find(page => page.slug === slug);
@@ -310,3 +300,4 @@ export const useSettings = () => {
   }
   return context;
 };
+
