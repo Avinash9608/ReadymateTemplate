@@ -14,12 +14,31 @@ export interface NavItem {
   isVisible: boolean;
 }
 
+export interface PageComponent {
+  id: string; // Unique ID for this component instance on the page
+  type: string; // e.g., "Hero", "TextContent", "Map"
+  props?: Record<string, any>; // Component-specific properties
+}
+
+export interface PageConfig {
+  id: string;
+  title: string;
+  slug: string;
+  pageType: 'Standard' | 'Form' | 'Landing' | string; // Allow string for flexibility
+  layoutPrompt?: string;
+  suggestedLayout?: PageComponent[]; // Array of component types and their props
+  createdAt: string;
+  updatedAt: string;
+  isPublished: boolean;
+}
+
 export interface SiteSettings {
   siteName?: string;
   tagline?: string;
   logoLightUrl?: string;
   logoDarkUrl?: string;
   navItems?: NavItem[];
+  pages?: PageConfig[]; // Added for custom pages
 }
 
 interface SettingsContextState {
@@ -30,6 +49,11 @@ interface SettingsContextState {
   updateNavItem: (id: string, updates: Partial<NavItem>) => void;
   removeNavItem: (id: string) => void;
   reorderNavItems: (id: string, direction: 'up' | 'down') => void;
+  addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => string; // Returns new page ID
+  updatePage: (slug: string, updates: Partial<PageConfig>) => void;
+  getPageBySlug: (slug: string) => PageConfig | undefined;
+  getAllPages: () => PageConfig[];
+  deletePage: (slug: string) => void;
 }
 
 const defaultSettings: SiteSettings = {
@@ -37,10 +61,11 @@ const defaultSettings: SiteSettings = {
   tagline: "Your futuristic furniture destination.",
   logoLightUrl: "", 
   logoDarkUrl: "",
-  navItems: [ // Default nav items
+  navItems: [
     { id: 'home', label: 'Home', type: 'internal', slug: '/', order: 1, isVisible: true },
     { id: 'products', label: 'Products', type: 'internal', slug: '/products', order: 2, isVisible: true },
   ],
+  pages: [], // Initialize with empty pages array
 };
 
 const initialState: SettingsContextState = {
@@ -51,6 +76,11 @@ const initialState: SettingsContextState = {
   updateNavItem: () => null,
   removeNavItem: () => null,
   reorderNavItems: () => null,
+  addPage: () => '',
+  updatePage: () => null,
+  getPageBySlug: () => undefined,
+  getAllPages: () => [],
+  deletePage: () => null,
 };
 
 const SettingsContext = createContext<SettingsContextState>(initialState);
@@ -74,9 +104,11 @@ export function SettingsProvider({
         const storedSettings = localStorage.getItem(storageKey);
         if (storedSettings) {
           const parsedSettings = JSON.parse(storedSettings);
-          // Ensure navItems exist and has default if not present in storage
           if (!parsedSettings.navItems || parsedSettings.navItems.length === 0) {
             parsedSettings.navItems = defaultSettings.navItems;
+          }
+          if (!parsedSettings.pages) { // Ensure pages array exists
+            parsedSettings.pages = [];
           }
           setSettingsState(parsedSettings);
         } else {
@@ -104,19 +136,21 @@ export function SettingsProvider({
     }
   }, [settings, storageKey, isLoading]);
 
-  const setSettings: Dispatch<SetStateAction<SiteSettings>> = (value) => {
+  const setSettingsDispatch: Dispatch<SetStateAction<SiteSettings>> = (value) => {
     setSettingsState(currentSettings => {
         const newSettings = typeof value === 'function' ? value(currentSettings) : value;
-        // Ensure navItems always has a valid array, even if reset
         if (!newSettings.navItems) {
             newSettings.navItems = defaultSettings.navItems || [];
+        }
+        if (!newSettings.pages) { // Ensure pages array exists on update
+            newSettings.pages = [];
         }
         return newSettings;
     });
   };
 
   const addNavItem = (item: Omit<NavItem, 'id' | 'order'>) => {
-    setSettings(prev => {
+    setSettingsState(prev => {
       const newNavItems = prev.navItems ? [...prev.navItems] : [];
       const newItem: NavItem = {
         ...item,
@@ -128,57 +162,94 @@ export function SettingsProvider({
   };
 
   const updateNavItem = (id: string, updates: Partial<NavItem>) => {
-    setSettings(prev => ({
+    setSettingsState(prev => ({
       ...prev,
       navItems: prev.navItems?.map(item => (item.id === id ? { ...item, ...updates } : item)),
     }));
   };
 
   const removeNavItem = (id: string) => {
-    setSettings(prev => ({
+    setSettingsState(prev => ({
       ...prev,
       navItems: prev.navItems?.filter(item => item.id !== id).map((item, index) => ({ ...item, order: index + 1 })),
     }));
   };
 
   const reorderNavItems = (id: string, direction: 'up' | 'down') => {
-    setSettings(prev => {
+    setSettingsState(prev => {
       const items = prev.navItems ? [...prev.navItems] : [];
       const itemIndex = items.findIndex(item => item.id === id);
       if (itemIndex === -1) return prev;
 
       const item = items[itemIndex];
-      let newOrder = item.order;
-
+      
       if (direction === 'up' && itemIndex > 0) {
         const prevItem = items[itemIndex - 1];
-        newOrder = prevItem.order;
-        prevItem.order = item.order;
-        item.order = newOrder;
+        [items[itemIndex], items[itemIndex - 1]] = [items[itemIndex - 1], items[itemIndex]];
       } else if (direction === 'down' && itemIndex < items.length - 1) {
         const nextItem = items[itemIndex + 1];
-        newOrder = nextItem.order;
-        nextItem.order = item.order;
-        item.order = newOrder;
+         [items[itemIndex], items[itemIndex + 1]] = [items[itemIndex + 1], items[itemIndex]];
       }
       
-      items.sort((a, b) => a.order - b.order);
-      // Normalize order after potential swaps
       const normalizedItems = items.map((it, idx) => ({ ...it, order: idx + 1 }));
-
       return { ...prev, navItems: normalizedItems };
     });
   };
 
+  // Page management functions
+  const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const newPageId = Date.now().toString();
+    const now = new Date().toISOString();
+    const newPage: PageConfig = {
+      ...pageData,
+      id: newPageId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setSettingsState(prev => ({
+      ...prev,
+      pages: [...(prev.pages || []), newPage],
+    }));
+    return newPageId;
+  };
+
+  const updatePage = (slug: string, updates: Partial<PageConfig>) => {
+    setSettingsState(prev => ({
+      ...prev,
+      pages: prev.pages?.map(page =>
+        page.slug === slug ? { ...page, ...updates, updatedAt: new Date().toISOString() } : page
+      ),
+    }));
+  };
+
+  const getPageBySlug = (slug: string): PageConfig | undefined => {
+    return settings.pages?.find(page => page.slug === slug);
+  };
+  
+  const getAllPages = (): PageConfig[] => {
+    return settings.pages || [];
+  };
+
+  const deletePage = (slug: string) => {
+    setSettingsState(prev => ({
+      ...prev,
+      pages: prev.pages?.filter(page => page.slug !== slug),
+    }));
+  };
 
   const value = {
     settings,
-    setSettings,
+    setSettings: setSettingsDispatch,
     isLoading,
     addNavItem,
     updateNavItem,
     removeNavItem,
     reorderNavItems,
+    addPage,
+    updatePage,
+    getPageBySlug,
+    getAllPages,
+    deletePage,
   };
 
   return (

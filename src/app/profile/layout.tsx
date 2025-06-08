@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette, List } from 'lucide-react'; // Added List icon
+import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette, List, FilePlus, Files } from 'lucide-react'; 
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileNavItems = [
@@ -15,9 +15,11 @@ const profileNavItems = [
 ];
 
 const adminNavItems = [
-  { name: 'Navbar Settings', href: '/admin/navbar', icon: List }, // Added Navbar Settings
+  { name: 'Navbar Settings', href: '/admin/navbar', icon: List },
   { name: 'Theme Control', href: '/admin/theme', icon: Palette },
   { name: 'Site Settings', href: '/admin/settings', icon: SettingsIcon },
+  { name: 'Create New Page', href: '/admin/pages/create', icon: FilePlus },
+  // Future: { name: 'Manage Pages', href: '/admin/pages', icon: Files },
 ];
 
 
@@ -71,7 +73,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
                   <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Admin Panel</p>
                   {adminNavItems.map((item) => (
                      <Link key={item.name} href={item.href} passHref>
-                      <Button variant={pathname === item.href ? 'secondary' : 'ghost'} className="w-full justify-start">
+                      <Button variant={pathname.startsWith(item.href) ? 'secondary' : 'ghost'} className="w-full justify-start">
                         <item.icon className="mr-2 h-4 w-4" /> {item.name}
                       </Button>
                     </Link>

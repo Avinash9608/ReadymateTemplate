@@ -5,10 +5,10 @@ import Link from 'next/link';
 import Logo from '@/components/shared/Logo';
 import ThemeToggle from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List } from 'lucide-react'; // Added List for Navbar admin
+import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List, FilePlus } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSettings } from '@/contexts/SettingsContext'; // Added
+import { useSettings } from '@/contexts/SettingsContext';
 import { useRouter } from 'next/navigation';
 
 const NavLinkInternal = ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -31,7 +31,7 @@ const NavLinkExternal = ({ href, children }: { href: string; children: React.Rea
 export default function Header() {
   const { cartItemCount } = useCart();
   const { user, logout } = useAuth();
-  const { settings, isLoading: settingsLoading } = useSettings(); // Get settings
+  const { settings, isLoading: settingsLoading } = useSettings(); 
   const router = useRouter();
 
   const handleLogout = () => {
@@ -67,7 +67,7 @@ export default function Header() {
             )
           )}
         </nav>
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex items-center space-x-1 sm:space-x-2">
           <ThemeToggle />
           <Link href="/cart" passHref>
             <Button variant="ghost" size="icon" aria-label="Shopping Cart">
@@ -98,23 +98,28 @@ export default function Header() {
             </Link>
           )}
            {user?.isAdmin && (
-            <>
+            <div className="hidden sm:flex items-center space-x-1">
                <Link href="/admin/navbar" passHref>
                 <Button variant="outline" size="sm" aria-label="Admin Navbar Settings">
-                  <List className="h-4 w-4 mr-1" /> Nav
+                  <List className="h-4 w-4" /> 
+                </Button>
+              </Link>
+              <Link href="/admin/pages/create" passHref>
+                <Button variant="outline" size="sm" aria-label="Create New Page">
+                    <FilePlus className="h-4 w-4" />
                 </Button>
               </Link>
               <Link href="/admin/theme" passHref>
                 <Button variant="outline" size="sm" aria-label="Admin Theme Settings">
-                  <PackageSearch className="h-4 w-4 mr-1" /> Theme
+                  <PackageSearch className="h-4 w-4" /> 
                 </Button>
               </Link>
                <Link href="/admin/settings" passHref>
                 <Button variant="outline" size="sm" aria-label="Admin Site Settings">
-                  <Settings className="h-4 w-4 mr-1" /> Site
+                  <Settings className="h-4 w-4" />
                 </Button>
               </Link>
-            </>
+            </div>
            )}
         </div>
       </div>
