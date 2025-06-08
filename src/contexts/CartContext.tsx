@@ -83,14 +83,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, initialState);
 
   useEffect(() => {
-    const storedCart = localStorage.getItem('furnishverse-cart');
-    if (storedCart) {
-      try {
-        dispatch({ type: 'LOAD_CART', payload: JSON.parse(storedCart) });
-      } catch (error) {
+    // Only access localStorage in a browser environment
+    if (typeof window !== 'undefined') {
+      const storedCart = localStorage.getItem('furnishverse-cart');
+      if (storedCart) {
+        try {
+          dispatch({ type: 'LOAD_CART', payload: JSON.parse(storedCart) });
+        } catch (error) {
+          // Handle potential parsing errors
         console.error("Failed to parse cart from localStorage", error);
-        localStorage.removeItem('furnishverse-cart');
+          localStorage.removeItem('furnishverse-cart');
+        }
       }
+
     }
   }, []);
 
