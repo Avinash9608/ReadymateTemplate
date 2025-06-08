@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode } from 'react';
@@ -13,9 +14,9 @@ interface User {
 interface AuthState {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<boolean>; // pass is unused for mock
+  login: (email: string, pass: string) => Promise<User | null>; // Changed return type
   logout: () => void;
-  register: (email: string, pass: string, name?:string) => Promise<boolean>; // pass is unused for mock
+  register: (email: string, pass: string, name?:string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -37,21 +38,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, _pass: string): Promise<boolean> => {
+  const login = async (email: string, pass: string): Promise<User | null> => {
     setIsLoading(true);
-    // Mock login
-    const mockUser: User = { id: '1', email, name: 'Mock User', isAdmin: email.includes('admin') }; // Simple admin check
-    setUser(mockUser);
+    // Mock login: For this demo, login always "succeeds" by returning a user object.
+    // A real implementation would validate 'pass' and might return null on failure.
+    // The isAdmin flag is set based on the email content.
+    const mockUser: User = { 
+      id: '1', 
+      email, 
+      name: email.includes('admin') ? 'Admin User' : 'Mock User', 
+      isAdmin: email.includes('admin') 
+    };
+    setUser(mockUser); // Set user in context
     localStorage.setItem('furnishverse-user', JSON.stringify(mockUser));
     setIsLoading(false);
-    return true;
+    return mockUser; // Return the user object
   };
 
   const register = async (email: string, _pass: string, name?: string): Promise<boolean> => {
     setIsLoading(true);
     // Mock register
     const mockUser: User = { id: Date.now().toString(), email, name: name || 'New User', isAdmin: email.includes('admin') };
-    setUser(mockUser);
+    setUser(mockUser); // This auto-logs in the user upon registration in the mock
     localStorage.setItem('furnishverse-user', JSON.stringify(mockUser));
     setIsLoading(false);
     return true;
@@ -76,3 +84,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

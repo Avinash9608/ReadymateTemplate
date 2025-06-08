@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -33,15 +34,20 @@ export default function LoginPage() {
 
   const onSubmit: SubmitHandler<LoginFormValues> = async (data) => {
     setIsLoading(true);
-    const success = await login(data.email, data.password);
+    const loggedInUser = await login(data.email, data.password);
     setIsLoading(false);
 
-    if (success) {
+    if (loggedInUser) {
       toast({
         title: "Login Successful",
         description: "Welcome back to FurnishVerse!",
       });
-      router.push('/profile');
+      // Check for specific admin credentials and admin status for redirect
+      if (loggedInUser.isAdmin && data.email === 'admin@gmail.com' && data.password === 'admin') {
+        router.push('/admin/theme');
+      } else {
+        router.push('/profile');
+      }
     } else {
       toast({
         title: "Login Failed",
