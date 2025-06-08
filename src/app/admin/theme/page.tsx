@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Palette, Save } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge'; // Added import
 
 // Helper to convert HSL string to individual H, S, L values
 const parseHslString = (hslString: string | undefined): { h: string, s: string, l: string } => {
