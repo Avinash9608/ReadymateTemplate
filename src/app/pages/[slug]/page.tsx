@@ -28,17 +28,34 @@ const TextContentBlock = ({ text }: { text?: string }) => (
   </div>
 );
 
-const ContactFormBlock = () => (
-  <div className="my-4 p-6 bg-card rounded-lg shadow">
-    <h3 className="text-2xl font-semibold mb-4">Contact Us (Placeholder)</h3>
-    <form className="space-y-4">
-      <div><Label htmlFor="name-ph">Name</Label><Input id="name-ph" type="text" placeholder="Your Name" /></div>
-      <div><Label htmlFor="email-ph">Email</Label><Input id="email-ph" type="email" placeholder="Your Email" /></div>
-      <div><Label htmlFor="message-ph">Message</Label><Textarea id="message-ph" placeholder="Your Message" /></div>
-      <Button type="button">Send Message</Button>
-    </form>
-  </div>
-);
+const ContactFormBlock = ({ title, fields }: { title?: string, fields?: {name: string, label: string, type: string, placeholder?: string}[] }) => {
+  const defaultFields = [
+    { name: "name", label: "Name", type: "text", placeholder: "Your Name" },
+    { name: "email", label: "Email", type: "email", placeholder: "Your Email" },
+    { name: "phone", label: "Phone Number", type: "tel", placeholder: "Your Phone Number (Optional)" },
+    { name: "message", label: "Message", type: "textarea", placeholder: "Your Message" },
+  ];
+  const formFieldsToRender = fields && fields.length > 0 ? fields : defaultFields;
+
+  return (
+    <div className="my-4 p-6 bg-card rounded-lg shadow">
+      <h3 className="text-2xl font-semibold mb-4">{title || "Contact Us"}</h3>
+      <form className="space-y-4">
+        {formFieldsToRender.map(field => (
+          <div key={field.name}>
+            <Label htmlFor={`form-${field.name}`}>{field.label}</Label>
+            {field.type === "textarea" ? (
+              <Textarea id={`form-${field.name}`} placeholder={field.placeholder} />
+            ) : (
+              <Input id={`form-${field.name}`} type={field.type} placeholder={field.placeholder} />
+            )}
+          </div>
+        ))}
+        <Button type="button">Send Message</Button>
+      </form>
+    </div>
+  );
+};
 
 const MapBlock = ({ address }: { address?: string }) => (
   <div className="my-4 p-6 bg-card rounded-lg shadow flex flex-col items-center justify-center aspect-video">
@@ -74,7 +91,7 @@ const ImageBlock = ({ src, alt }: { src?: string, alt?: string }) => (
 
 const ButtonBlock = ({ text, link }: { text?: string, link?: string }) => (
   <div className="my-4 text-center">
-    <Button asChild={!!link} disabled={!link && !text} size="lg">
+    <Button asChild={!!link} disabled={!text} size="lg">
       {link ? <Link href={link}>{text || "Button Placeholder"}</Link> : <span>{text || "Button Placeholder"}</span>}
     </Button>
   </div>
