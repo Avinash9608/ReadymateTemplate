@@ -82,7 +82,7 @@ export default function CreatePage() {
     setIsSubmitting(true);
 
     if (getPageBySlug(data.slug)) {
-      toast({ title: "Slug already exists", description: "Please choose a unique slug.", variant: "destructive" });
+      toast({ title: "Slug already exists", description: "Please choose a unique slug for the page URL part.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
@@ -94,7 +94,7 @@ export default function CreatePage() {
 
     addPage({
       title: data.title,
-      slug: data.slug,
+      slug: data.slug, // This is the URL part, e.g., "contact-us"
       pageType: data.pageType,
       layoutPrompt: data.layoutPrompt,
       suggestedLayout: pageLayout,
@@ -103,9 +103,11 @@ export default function CreatePage() {
 
     toast({
       title: "Page Created!",
-      description: `The page "${data.title}" has been successfully created.`,
+      description: `The page "${data.title}" created. Redirecting to add it to the navbar.`,
     });
-    router.push(`/admin/pages/edit/${data.slug}`); // Redirect to an edit page (to be created)
+    // Redirect to navbar settings with new page details to pre-fill the form
+    // The slug for the navbar item should be the full path, e.g., /pages/contact-us
+    router.push(`/admin/navbar?action=add&label=${encodeURIComponent(data.title)}&slug=${encodeURIComponent(`/pages/${data.slug}`)}&type=internal`);
     setIsSubmitting(false);
   };
 
@@ -135,7 +137,7 @@ export default function CreatePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="slug">Page Slug (URL)</Label>
+              <Label htmlFor="slug">Page Slug (URL part)</Label>
               <Input id="slug" {...register("slug")} placeholder="e.g., contact-us, about-our-company" />
               {errors.slug && <p className="text-sm text-destructive">{errors.slug.message}</p>}
               <p className="text-xs text-muted-foreground">Full URL will be: /pages/{watch("slug") || "your-slug"}</p>
@@ -191,14 +193,11 @@ export default function CreatePage() {
                 <p className="text-sm text-muted-foreground">AI could not determine specific components. A default text block will be added.</p>
             )}
 
-
-            {/* isPublished toggle can be added here if needed */}
-
           </CardContent>
           <CardFooter className="flex justify-end">
             <Button type="submit" disabled={isSubmitting || isSuggestingLayout}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              {isSubmitting ? "Creating Page..." : "Create Page"}
+              {isSubmitting ? "Creating Page..." : "Create Page & Add to Nav"}
             </Button>
           </CardFooter>
         </form>
@@ -206,3 +205,4 @@ export default function CreatePage() {
     </div>
   );
 }
+

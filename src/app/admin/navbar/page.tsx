@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, ArrowUp, ArrowDown, LinkIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 
 type NavItemFormData = Omit<NavItem, 'id' | 'order'>;
 
@@ -21,8 +21,9 @@ export default function AdminNavbarPage() {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams(); // For reading query parameters
 
-  const [isEditing, setIsEditing] = useState<string | null>(null); // Holds ID of item being edited
+  const [isEditing, setIsEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState<NavItemFormData>({
     label: '',
     type: 'internal',
@@ -30,6 +31,7 @@ export default function AdminNavbarPage() {
     externalUrl: '',
     isVisible: true,
   });
+  const [paramsProcessed, setParamsProcessed] = useState(false); // To ensure params are processed only once
 
   useEffect(() => {
     if (!authLoading && (!user || !user.isAdmin)) {
@@ -37,6 +39,34 @@ export default function AdminNavbarPage() {
       router.push('/');
     }
   }, [user, authLoading, router, toast]);
+
+  // Effect to pre-fill form from query parameters (e.g., after creating a page)
+  useEffect(() => {
+    if (paramsProcessed || isEditing) return; // Don't process if already done or if user is actively editing
+
+    const action = searchParams.get('action');
+    const label = searchParams.get('label');
+    const slugFromParams = searchParams.get('slug'); // This will be the full path e.g. /pages/contact
+    const typeFromParams = searchParams.get('type') as 'internal' | 'external' | null;
+
+    if (action === 'add' && label && slugFromParams && typeFromParams === 'internal') {
+      setFormData({
+        label: label,
+        type: 'internal',
+        slug: slugFromParams,
+        externalUrl: '',
+        isVisible: true,
+      });
+      setIsEditing(null); // Ensure we are in "add new" mode
+      toast({ title: "Ready to Add Nav Item", description: `Details for page "${label}" pre-filled.` });
+      
+      // Clear query params to prevent re-processing on refresh or back navigation
+      const currentPath = window.location.pathname;
+      router.replace(currentPath, { scroll: false }); 
+      setParamsProcessed(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, router, paramsProcessed, isEditing, toast]); // setFormData & setIsEditing are stable from useState
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -85,11 +115,13 @@ export default function AdminNavbarPage() {
       externalUrl: item.externalUrl || '',
       isVisible: item.isVisible,
     });
+    setParamsProcessed(true); // Prevent query params from overwriting an edit in progress
   };
 
   const resetForm = () => {
     setIsEditing(null);
     setFormData({ label: '', type: 'internal', slug: '/', externalUrl: '', isVisible: true });
+    setParamsProcessed(false); // Allow params to be processed again if navigated with new ones
   };
 
   const sortedNavItems = settings.navItems ? [...settings.navItems].sort((a, b) => a.order - b.order) : [];
@@ -131,7 +163,8 @@ export default function AdminNavbarPage() {
                 {formData.type === 'internal' ? (
                   <div className="space-y-1">
                     <Label htmlFor="slug">Slug</Label>
-                    <Input id="slug" name="slug" value={formData.slug} onChange={handleInputChange} placeholder="e.g., /about, /contact" />
+                    <Input id="slug" name="slug" value={formData.slug} onChange={handleInputChange} placeholder="e.g., /about, /pages/contact" />
+                     <p className="text-xs text-muted-foreground">For custom pages, use /pages/your-slug.</p>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -198,3 +231,4 @@ export default function AdminNavbarPage() {
     </div>
   );
 }
+
