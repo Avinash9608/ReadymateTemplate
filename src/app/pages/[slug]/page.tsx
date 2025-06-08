@@ -35,7 +35,7 @@ const ContactFormBlock = () => (
       <div><Label htmlFor="name-ph">Name</Label><Input id="name-ph" type="text" placeholder="Your Name" /></div>
       <div><Label htmlFor="email-ph">Email</Label><Input id="email-ph" type="email" placeholder="Your Email" /></div>
       <div><Label htmlFor="message-ph">Message</Label><Textarea id="message-ph" placeholder="Your Message" /></div>
-      <Button type="button" disabled>Send Message (Disabled)</Button>
+      <Button type="button">Send Message</Button>
     </form>
   </div>
 );
