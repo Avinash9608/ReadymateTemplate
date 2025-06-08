@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Palette, Save } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { Badge } from '@/components/ui/badge'; // Added import
+import { Badge } from '@/components/ui/badge';
 
 // Helper to convert HSL string to individual H, S, L values
 const parseHslString = (hslString: string | undefined): { h: string, s: string, l: string } => {
@@ -155,9 +155,9 @@ export default function AdminThemePage() {
             colorPreview={constructHslString(accentH, accentS, accentL)}
           />
           {/* Example display of current theme mode */}
-          <p className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             Current site mode: <Badge variant="outline">{effectiveTheme}</Badge>. Theme colors apply to both light and dark modes.
-          </p>
+          </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-3">
           <Button variant="outline" onClick={handleResetToDefaults}>Reset to Defaults</Button>
@@ -169,3 +169,4 @@ export default function AdminThemePage() {
     </div>
   );
 }
+
