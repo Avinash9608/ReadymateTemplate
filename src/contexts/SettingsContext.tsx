@@ -17,7 +17,7 @@ export interface NavItem {
 export interface PageComponent {
   id: string; // Unique ID for this component instance on the page
   type: string; // e.g., "Hero", "TextContent", "Map"
-  props?: Record<string, any>; // Component-specific properties
+  props: Record<string, any>; // Component-specific properties
 }
 
 export interface PageConfig {
@@ -26,7 +26,7 @@ export interface PageConfig {
   slug: string;
   pageType: 'Standard' | 'Form' | 'Landing' | string; // Allow string for flexibility
   layoutPrompt?: string;
-  suggestedLayout?: PageComponent[]; // Array of component types and their props
+  suggestedLayout: PageComponent[]; // Array of component types and their props
   createdAt: string;
   updatedAt: string;
   isPublished: boolean;
@@ -52,7 +52,7 @@ interface SettingsContextState {
   addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => PageConfig; // Returns new page
   updatePage: (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   getPageBySlug: (slug: string) => PageConfig | undefined;
-  getPageById: (id: string) => PageConfig | undefined; // Added
+  getPageById: (id: string) => PageConfig | undefined;
   getAllPages: () => PageConfig[];
   deletePage: (pageId: string) => void;
 }
@@ -111,6 +111,15 @@ export function SettingsProvider({
           }
           if (!parsedSettings.pages) {
             parsedSettings.pages = [];
+          } else {
+            // Ensure all pages have a suggestedLayout array and props object for each component
+            parsedSettings.pages = parsedSettings.pages.map((page: PageConfig) => ({
+              ...page,
+              suggestedLayout: (page.suggestedLayout || []).map((component: PageComponent) => ({
+                ...component,
+                props: component.props || { placeholderContent: `Content for ${component.type}` },
+              })),
+            }));
           }
           setSettingsState(parsedSettings);
         } else {
@@ -202,6 +211,10 @@ export function SettingsProvider({
       id: newPageId,
       createdAt: now,
       updatedAt: now,
+      suggestedLayout: (pageData.suggestedLayout || []).map(comp => ({
+        ...comp,
+        props: comp.props || { placeholderContent: `Default content for ${comp.type}` }
+      }))
     };
     setSettingsState(prev => ({
       ...prev,
@@ -214,7 +227,16 @@ export function SettingsProvider({
     setSettingsState(prev => ({
       ...prev,
       pages: prev.pages?.map(page =>
-        page.id === pageId ? { ...page, ...updates, slug: updates.slug || page.slug, updatedAt: new Date().toISOString() } : page
+        page.id === pageId ? { 
+          ...page, 
+          ...updates, 
+          slug: updates.slug || page.slug, 
+          suggestedLayout: (updates.suggestedLayout || page.suggestedLayout).map(comp => ({
+             ...comp,
+             props: comp.props || { placeholderContent: `Updated content for ${comp.type}` }
+          })),
+          updatedAt: new Date().toISOString() 
+        } : page
       ),
     }));
   };
@@ -235,7 +257,6 @@ export function SettingsProvider({
     setSettingsState(prev => ({
       ...prev,
       pages: prev.pages?.filter(page => page.id !== pageId),
-      // Optionally, also remove related navbar items
       navItems: prev.navItems?.filter(item => !item.slug || !prev.pages?.find(p => p.id === pageId && `/pages/${p.slug}` === item.slug))
     }));
   };

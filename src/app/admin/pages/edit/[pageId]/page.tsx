@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
+import { useForm, type SubmitHandler, Controller, useFormContext, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -15,9 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useSettings, type PageComponent, type PageConfig } from '@/contexts/SettingsContext';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Sparkles, LayoutList, Trash2, ArrowUp, ArrowDown, PlusCircle, SettingsIcon } from 'lucide-react';
+import { Loader2, Save, Sparkles, LayoutList, Trash2, ArrowUp, ArrowDown, PlusCircle, SettingsIcon, Edit } from 'lucide-react';
 import { suggestPageLayout, type PageLayoutSuggestionOutput } from '@/ai/flows/page-layout-suggestion-flow';
-import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 const pageSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -32,6 +32,51 @@ type PageFormValues = z.infer<typeof pageSchema>;
 const availableComponentTypes = ["Hero", "TextContent", "ContactForm", "Map", "FAQ", "Image", "Button", "ProductGrid", "TestimonialSlider", "CallToAction"] as const;
 type AvailableComponentType = typeof availableComponentTypes[number];
 
+// --- Component Prop Edit Forms ---
+const TextContentEditSchema = z.object({ text: z.string().min(1, "Text cannot be empty") });
+type TextContentFormValues = z.infer<typeof TextContentEditSchema>;
+const TextContentEditForm = ({ currentProps, onSave }: { currentProps: Record<string, any>, onSave: (newProps: Record<string, any>) => void }) => {
+  const methods = useForm<TextContentFormValues>({ resolver: zodResolver(TextContentEditSchema), defaultValues: { text: currentProps.text || '' } });
+  const onSubmit: SubmitHandler<TextContentFormValues> = (data) => onSave(data);
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <Label htmlFor="text">Content</Label>
+          <Textarea id="text" {...methods.register("text")} rows={5} />
+          {methods.formState.errors.text && <p className="text-sm text-destructive">{methods.formState.errors.text.message}</p>}
+        </div>
+        <Button type="submit">Save Text</Button>
+      </form>
+    </FormProvider>
+  );
+};
+
+const ImageEditSchema = z.object({ src: z.string().url("Must be a valid URL"), alt: z.string().min(1, "Alt text is required") });
+type ImageFormValues = z.infer<typeof ImageEditSchema>;
+const ImageEditForm = ({ currentProps, onSave }: { currentProps: Record<string, any>, onSave: (newProps: Record<string, any>) => void }) => {
+  const methods = useForm<ImageFormValues>({ resolver: zodResolver(ImageEditSchema), defaultValues: { src: currentProps.src || '', alt: currentProps.alt || '' } });
+  const onSubmit: SubmitHandler<ImageFormValues> = (data) => onSave(data);
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <Label htmlFor="src">Image URL</Label>
+          <Input id="src" {...methods.register("src")} placeholder="https://placehold.co/600x400.png" />
+          {methods.formState.errors.src && <p className="text-sm text-destructive">{methods.formState.errors.src.message}</p>}
+        </div>
+        <div>
+          <Label htmlFor="alt">Alt Text</Label>
+          <Input id="alt" {...methods.register("alt")} placeholder="Descriptive alt text" />
+          {methods.formState.errors.alt && <p className="text-sm text-destructive">{methods.formState.errors.alt.message}</p>}
+        </div>
+        <Button type="submit">Save Image</Button>
+      </form>
+    </FormProvider>
+  );
+};
+// Add more edit forms for other components (Hero, Button, etc.) here
+
 
 export default function EditPage() {
   const params = useParams();
@@ -45,6 +90,9 @@ export default function EditPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuggestingLayout, setIsSuggestingLayout] = useState(false);
   const [currentLayout, setCurrentLayout] = useState<PageComponent[]>([]);
+  
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingComponent, setEditingComponent] = useState<PageComponent | null>(null);
   
   const { register, handleSubmit, control, watch, setValue, reset, formState: { errors, isDirty } } = useForm<PageFormValues>({
     resolver: zodResolver(pageSchema),
@@ -62,7 +110,7 @@ export default function EditPage() {
           layoutPrompt: fetchedPage.layoutPrompt || '',
           isPublished: fetchedPage.isPublished,
         });
-        setCurrentLayout(fetchedPage.suggestedLayout || []);
+        setCurrentLayout(fetchedPage.suggestedLayout.map(comp => ({...comp, props: comp.props || { placeholderContent: `Default content for ${comp.type}` }})) || []);
       } else {
         toast({ title: "Page not found", description: "Could not find the page you're trying to edit.", variant: "destructive" });
         router.push('/admin/pages/manage');
@@ -70,18 +118,17 @@ export default function EditPage() {
     }
   }, [pageId, settingsLoading, getPageById, reset, router, toast]);
 
-  const currentTitle = watch("title");
   const originalSlug = pageData?.slug;
 
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const title = event.target.value;
     setValue("title", title, { shouldDirty: true });
-    if (watch("slug") === originalSlug || !isDirty) { // Only auto-update slug if it hasn't been manually changed or if form isn't dirty for slug
-        const slug = title
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '');
-        setValue("slug", slug, { shouldDirty: true });
+    const currentSlug = watch("slug");
+    // Only auto-update slug if it matches the auto-generated slug from original title or if it's empty
+    const autoSlugFromOriginalTitle = pageData?.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (currentSlug === autoSlugFromOriginalTitle || !currentSlug || currentSlug === originalSlug) {
+        const newSlug = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        setValue("slug", newSlug, { shouldDirty: true });
     }
   };
 
@@ -95,11 +142,12 @@ export default function EditPage() {
     try {
       const result: PageLayoutSuggestionOutput = await suggestPageLayout({ pageType, userPrompt: layoutPrompt });
       const newLayout: PageComponent[] = result.suggestedComponents.map((type, index) => ({
-        id: `${type.toLowerCase()}-${index}-${Date.now()}`,
+        id: `${type.toLowerCase().replace(/\s+/g, '-')}-${index}-${Date.now()}`,
         type,
-        props: { placeholderContent: `Placeholder for ${type}` } 
+        props: { placeholderContent: `New placeholder for ${type}. Click edit to customize.` } 
       }));
       setCurrentLayout(newLayout);
+      setValue("layoutPrompt", layoutPrompt, {shouldDirty: true}); // Mark form dirty
       toast({ title: "Layout Suggested!", description: "Review the new suggested components below. Save to apply." });
     } catch (error) {
       console.error("Error suggesting layout:", error);
@@ -113,11 +161,13 @@ export default function EditPage() {
     if (!pageData) return;
     setIsSubmitting(true);
 
-    // Check if slug has changed and if the new slug is already taken by another page
-    if (data.slug !== originalSlug && getPageBySlug(data.slug)) {
-        toast({ title: "Slug already exists", description: "The new slug you've chosen is already in use by another page. Please choose a unique slug.", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
+    if (data.slug !== originalSlug) {
+      const existingPageWithSlug = getPageBySlug(data.slug);
+      if (existingPageWithSlug && existingPageWithSlug.id !== pageData.id) {
+          toast({ title: "Slug already exists", description: "The new slug you've chosen is already in use by another page. Please choose a unique slug.", variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+      }
     }
 
     updatePage(pageData.id, {
@@ -133,20 +183,23 @@ export default function EditPage() {
       title: "Page Updated!",
       description: `The page "${data.title}" has been successfully updated.`,
     });
-    // Update pageData to reflect changes, especially if slug changed, for next save
     setPageData(prev => prev ? {...prev, ...data, suggestedLayout: currentLayout, slug: data.slug} : null); 
-    reset(data); // Reset form with new defaults to clear dirty state
+    reset(data); 
     setIsSubmitting(false);
-    // Optionally, redirect or stay on page
-    // router.push('/admin/pages/manage'); 
   };
 
   const handleAddComponent = (componentType: AvailableComponentType) => {
     if (!componentType) return;
+    let defaultProps: Record<string, any> = { placeholderContent: `New ${componentType} Block. Edit to add content.` };
+    if (componentType === "TextContent") defaultProps = { text: "New text block. Edit me!" };
+    if (componentType === "Image") defaultProps = { src: "", alt: "Placeholder image" };
+    if (componentType === "Hero") defaultProps = { title: "Hero Title", subtitle: "Hero Subtitle" };
+    if (componentType === "Button") defaultProps = { text: "Click Me", link: "/" };
+
     const newComponent: PageComponent = {
-      id: `${componentType.toLowerCase()}-${Date.now()}`,
+      id: `${componentType.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
       type: componentType,
-      props: { placeholderContent: `New ${componentType} Block` }
+      props: defaultProps
     };
     setCurrentLayout(prev => [...prev, newComponent]);
   };
@@ -170,6 +223,34 @@ export default function EditPage() {
     });
   };
 
+  const openEditModal = (component: PageComponent) => {
+    setEditingComponent(component);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveComponentProps = (updatedProps: Record<string, any>) => {
+    if (!editingComponent) return;
+    setCurrentLayout(prev => prev.map(c => c.id === editingComponent.id ? { ...c, props: updatedProps } : c));
+    setIsEditModalOpen(false);
+    setEditingComponent(null);
+    toast({title: "Component Updated", description: `Properties for ${editingComponent.type} saved.`})
+  };
+
+  const renderEditFormComponent = () => {
+    if (!editingComponent) return null;
+    switch (editingComponent.type) {
+      case "TextContent":
+        return <TextContentEditForm currentProps={editingComponent.props} onSave={handleSaveComponentProps} />;
+      case "Image":
+        return <ImageEditForm currentProps={editingComponent.props} onSave={handleSaveComponentProps} />;
+      // Add cases for Hero, Button, etc.
+      // case "Hero":
+      //   return <HeroEditForm currentProps={editingComponent.props} onSave={handleSaveComponentProps} />;
+      default:
+        return <p>No edit form available for component type: {editingComponent.type}. Default props will be used.</p>;
+    }
+  };
+
 
   if (settingsLoading || !pageData) {
     return (
@@ -183,7 +264,6 @@ export default function EditPage() {
     <div className="container mx-auto px-4 py-8">
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid md:grid-cols-3 gap-8 items-start">
-          {/* Left Column: Page Settings & AI Prompt */}
           <div className="md:col-span-1 space-y-6">
             <Card className="shadow-xl sticky top-24">
               <CardHeader>
@@ -245,7 +325,7 @@ export default function EditPage() {
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting || isSuggestingLayout || !isDirty}>
+                <Button type="submit" disabled={isSubmitting || isSuggestingLayout}>
                   {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                   Save Page
                 </Button>
@@ -253,7 +333,6 @@ export default function EditPage() {
             </Card>
           </div>
 
-          {/* Right Column: Current Layout Components */}
           <div className="md:col-span-2">
             <Card className="shadow-xl">
               <CardHeader>
@@ -268,7 +347,7 @@ export default function EditPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
                     <Controller
-                        name="addComponentType" // Dummy name for react-hook-form, not actually submitted
+                        name="addComponentType" 
                         control={control}
                         render={({ field }) => (
                             <Select onValueChange={(value) => handleAddComponent(value as AvailableComponentType)} value="">
@@ -291,9 +370,14 @@ export default function EditPage() {
                       <li key={component.id} className="flex items-center justify-between p-3 border rounded-md bg-card hover:bg-muted/50 transition-colors">
                         <div className="flex-grow">
                           <span className="font-medium">{component.type}</span>
-                          <p className="text-xs text-muted-foreground">{component.props?.placeholderContent || `Component ID: ${component.id}`}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {component.props?.text || component.props?.src || component.props?.title || component.props?.placeholderContent || `Component ID: ${component.id}`}
+                          </p>
                         </div>
                         <div className="flex items-center space-x-1 sm:space-x-2 ml-2">
+                          <Button variant="outline" size="icon" onClick={() => openEditModal(component)} title="Edit Component Properties">
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleMoveComponent(component.id, 'up')} disabled={index === 0} title="Move Up">
                             <ArrowUp className="h-4 w-4" />
                           </Button>
@@ -315,8 +399,25 @@ export default function EditPage() {
           </div>
         </div>
       </form>
+      
+      {editingComponent && (
+        <Dialog open={isEditModalOpen} onOpenChange={(isOpen) => { if(!isOpen) { setEditingComponent(null); setIsEditModalOpen(false);}}}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit {editingComponent.type} Properties</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              {renderEditFormComponent()}
+            </div>
+            {/* Footer might be part of individual forms or generic */}
+            {/* <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+            </DialogFooter> */}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-
-    

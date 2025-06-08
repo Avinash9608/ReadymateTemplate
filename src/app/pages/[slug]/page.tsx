@@ -5,14 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSettings, type PageConfig, type PageComponent as PageComponentType } from '@/contexts/SettingsContext';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
+import { ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Corrected import
+import { Textarea } from '@/components/ui/textarea';
 
-// Placeholder Dynamic Components
+// --- Dynamic Components ---
 const HeroBlock = ({ title, subtitle }: { title?: string, subtitle?: string }) => (
   <section className="py-12 md:py-20 bg-secondary/50 rounded-lg shadow-md my-4">
     <div className="container mx-auto px-4 text-center">
@@ -45,7 +45,7 @@ const MapBlock = ({ address }: { address?: string }) => (
     <h3 className="text-2xl font-semibold mb-2">Map Placeholder</h3>
     {address && <p className="text-muted-foreground mb-2">Location: {address}</p>}
     <div className="w-full h-full bg-muted rounded flex items-center justify-center text-muted-foreground">
-      [Google Maps Embed Placeholder]
+      [Google Maps Embed Placeholder for: {address || 'Default Location'}]
     </div>
   </div>
 );
@@ -58,16 +58,16 @@ const FaqBlock = ({ faqs }: { faqs?: { q: string, a: string }[] }) => (
         <h4 className="font-medium">{faq.q || `Question ${i+1}`}</h4>
         <p className="text-muted-foreground">{faq.a || `Answer placeholder ${i+1}`}</p>
       </div>
-    )) : <p className="text-muted-foreground">No FAQ items defined.</p>}
+    )) : <p className="text-muted-foreground">No FAQ items defined. Add them via admin.</p>}
   </div>
 );
 
 const ImageBlock = ({ src, alt }: { src?: string, alt?: string }) => (
    <div className="my-4 rounded-lg shadow overflow-hidden aspect-video bg-muted flex items-center justify-center">
     {src ? (
-      <Image src={src} alt={alt || "Placeholder Image"} data-ai-hint="custom page image" width={800} height={450} className="object-cover w-full h-full" />
+      <Image src={src} alt={alt || "Displayed image"} data-ai-hint={alt || "custom page image"} width={800} height={450} className="object-cover w-full h-full" />
     ) : (
-      <p className="text-muted-foreground">Image Placeholder</p>
+      <p className="text-muted-foreground">Image Placeholder - Add URL via admin</p>
     )}
   </div>
 );
@@ -84,21 +84,21 @@ const ProductGridBlock = () => (
   <div className="my-4 p-6 bg-card rounded-lg shadow">
     <h3 className="text-2xl font-semibold mb-4">Product Grid (Placeholder)</h3>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {[1,2,3].map(i => <div key={i} className="border p-4 rounded bg-muted text-center">Product {i}</div>)}
+      {[1,2,3].map(i => <div key={i} className="border p-4 rounded bg-muted text-center">Product Placeholder {i}</div>)}
     </div>
   </div>
 );
 const TestimonialSliderBlock = () => (
   <div className="my-4 p-6 bg-card rounded-lg shadow text-center">
     <h3 className="text-2xl font-semibold mb-4">Testimonials (Placeholder)</h3>
-    <p className="italic text-muted-foreground">"This is a great product!" - Happy Customer</p>
+    <p className="italic text-muted-foreground">"This is a great product!" - Happy Customer (Placeholder)</p>
   </div>
 );
 const CallToActionBlock = ({ title, text, buttonText, buttonLink }: { title?: string, text?: string, buttonText?: string, buttonLink?: string }) => (
   <section className="py-12 bg-primary/10 rounded-lg shadow-md my-4">
     <div className="container mx-auto px-4 text-center">
       <h2 className="text-3xl font-bold font-headline text-primary mb-3">{title || "Call to Action!"}</h2>
-      <p className="text-lg text-foreground mb-6">{text || "Don't miss out on this amazing opportunity."}</p>
+      <p className="text-lg text-foreground mb-6">{text || "Don't miss out on this amazing opportunity. Configure this text."}</p>
       <Button asChild={!!buttonLink} size="lg" disabled={!buttonText}>
         {buttonLink ? <Link href={buttonLink}>{buttonText || "Learn More"}</Link> : <span>{buttonText || "Learn More"}</span>}
       </Button>
@@ -130,6 +130,7 @@ const RenderComponent = ({ component }: { component: PageComponentType }) => {
       </div>
     );
   }
+  // Pass all props from component.props to the rendered component
   return <ComponentToRender {...(component.props || {})} />;
 };
 
@@ -149,9 +150,9 @@ export default function DynamicPage() {
     }
     if (slug) {
       const config = getPageBySlug(slug);
-      setPageConfig(config || null); // Set to config if found, otherwise null
+      setPageConfig(config || null); 
     } else {
-      setPageConfig(null); // No slug, so page not found
+      setPageConfig(null); 
     }
   }, [slug, getPageBySlug, settingsLoading]);
 
@@ -164,7 +165,7 @@ export default function DynamicPage() {
     );
   }
 
-  if (pageConfig === null) { // Page explicitly not found or slug missing
+  if (pageConfig === null) { 
     return (
       <div className="text-center py-20">
         <AlertTriangle className="mx-auto h-24 w-24 text-destructive mb-6" />
@@ -177,7 +178,6 @@ export default function DynamicPage() {
     );
   }
   
-  // At this point, pageConfig is a valid PageConfig object
   if (!pageConfig.isPublished) {
      return (
       <div className="text-center py-20">
@@ -207,3 +207,4 @@ export default function DynamicPage() {
     </div>
   );
 }
+
