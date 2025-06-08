@@ -225,40 +225,40 @@ export function SettingsProvider({
 
   const updatePage = (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => {
     setSettingsState(prev => {
-        const newPagesArray = prev.pages?.map(page => {
-            if (page.id === pageId) {
-                // Determine the new suggestedLayout
-                // If updates.suggestedLayout is provided, use it; otherwise, use the current page's layout.
-                const baseLayout = updates.suggestedLayout !== undefined 
-                    ? updates.suggestedLayout 
-                    : page.suggestedLayout;
+      const newPagesArray = prev.pages?.map(page => {
+        if (page.id === pageId) {
+          // Start with the original page data
+          let updatedPageData = { ...page };
 
-                // Ensure all components in the final layout have their props initialized.
-                const finalSuggestedLayout = baseLayout.map(comp => ({
-                    ...comp,
-                    props: comp.props || { placeholderContent: `Content for ${comp.type}` }
-                }));
-
-                // Construct the updated page object
-                return {
-                    ...page, // Start with the original page data
-                    // Apply specific updates, excluding suggestedLayout which is handled separately
-                    title: updates.title !== undefined ? updates.title : page.title,
-                    slug: updates.slug !== undefined ? updates.slug : page.slug,
-                    pageType: updates.pageType !== undefined ? updates.pageType : page.pageType,
-                    layoutPrompt: updates.layoutPrompt !== undefined ? updates.layoutPrompt : page.layoutPrompt,
-                    isPublished: updates.isPublished !== undefined ? updates.isPublished : page.isPublished,
-                    // Now, assign the processed finalSuggestedLayout
-                    suggestedLayout: finalSuggestedLayout,
-                    updatedAt: new Date().toISOString(),
-                };
+          // Apply all updates EXCEPT suggestedLayout for now
+          for (const key in updates) {
+            if (key !== 'suggestedLayout' && key !== 'id' && key !== 'createdAt' && key !== 'updatedAt') {
+              (updatedPageData as any)[key] = (updates as any)[key];
             }
-            return page; // Return other pages unmodified
-        });
-        return { ...prev, pages: newPagesArray };
-    });
-};
+          }
+          
+          // Determine the source for the layout: from updates if provided, else from current page
+          const layoutSource = updates.suggestedLayout !== undefined 
+            ? updates.suggestedLayout 
+            : page.suggestedLayout;
 
+          // Ensure all components in the final layout have their props initialized.
+          const finalSuggestedLayout = (layoutSource || []).map(comp => ({
+            ...comp,
+            props: comp.props || { placeholderContent: `Content for ${comp.type}` }
+          }));
+
+          // Assign the processed layout and update timestamp
+          updatedPageData.suggestedLayout = finalSuggestedLayout;
+          updatedPageData.updatedAt = new Date().toISOString();
+          
+          return updatedPageData;
+        }
+        return page;
+      });
+      return { ...prev, pages: newPagesArray };
+    });
+  };
 
   const getPageBySlug = (slug: string): PageConfig | undefined => {
     return settings.pages?.find(page => page.slug === slug);
@@ -310,5 +310,3 @@ export const useSettings = () => {
   }
   return context;
 };
-
-    
