@@ -16,6 +16,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        hostname: 'www.ironplane.com',
+      },
+ {
+ hostname: 'encrypted-tbn0.gstatic.com',
+ },
     ],
   },
 };
