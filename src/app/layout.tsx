@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -6,10 +7,11 @@ import Footer from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { CartProvider } from '@/contexts/CartContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { SettingsProvider } from '@/contexts/SettingsContext'; // Added
 
 export const metadata: Metadata = {
-  title: 'FurnishVerse',
-  description: 'Your futuristic furniture destination.',
+  title: 'FurnishVerse', // This can be dynamic later based on SettingsContext
+  description: 'Your futuristic furniture destination.', // This can be dynamic later
 };
 
 export default function RootLayout({
@@ -32,16 +34,18 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <CartProvider>
-              <div className="flex flex-col min-h-screen">
-                <Header />
-                <main className="flex-grow container mx-auto px-4 py-8">
-                  {children}
-                </main>
-                <Footer />
-              </div>
-              <Toaster />
-            </CartProvider>
+            <SettingsProvider> {/* Added SettingsProvider */}
+              <CartProvider>
+                <div className="flex flex-col min-h-screen">
+                  <Header />
+                  <main className="flex-grow container mx-auto px-4 py-8">
+                    {children}
+                  </main>
+                  <Footer />
+                </div>
+                <Toaster />
+              </CartProvider>
+            </SettingsProvider> {/* Added SettingsProvider */}
           </ThemeProvider>
         </AuthProvider>
       </body>

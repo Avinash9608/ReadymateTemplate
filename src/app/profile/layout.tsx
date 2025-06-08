@@ -1,3 +1,4 @@
+
 "use client";
 
 import { ReactNode, useEffect } from 'react';
@@ -5,13 +6,19 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { UserCog, History, LogOut, LayoutDashboard } from 'lucide-react';
+import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette } from 'lucide-react'; // Added SettingsIcon, Palette
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileNavItems = [
   { name: 'Account Details', href: '/profile', icon: UserCog },
   { name: 'Order History', href: '/profile/orders', icon: History },
 ];
+
+const adminNavItems = [
+  { name: 'Theme Control', href: '/admin/theme', icon: Palette },
+  { name: 'Site Settings', href: '/admin/settings', icon: SettingsIcon },
+];
+
 
 export default function ProfileLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -58,11 +65,17 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
                 </Link>
               ))}
               {user.isAdmin && (
-                <Link href="/admin/theme" passHref>
-                  <Button variant={pathname === '/admin/theme' ? 'secondary' : 'ghost'} className="w-full justify-start">
-                    <LayoutDashboard className="mr-2 h-4 w-4" /> Admin Panel
-                  </Button>
-                </Link>
+                <>
+                  <Separator className="my-2" />
+                  <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Admin Panel</p>
+                  {adminNavItems.map((item) => (
+                     <Link key={item.name} href={item.href} passHref>
+                      <Button variant={pathname === item.href ? 'secondary' : 'ghost'} className="w-full justify-start">
+                        <item.icon className="mr-2 h-4 w-4" /> {item.name}
+                      </Button>
+                    </Link>
+                  ))}
+                </>
               )}
               <Separator className="my-2" />
               <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive-foreground hover:bg-destructive" onClick={handleLogout}>

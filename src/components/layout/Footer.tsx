@@ -1,14 +1,20 @@
+
 "use client";
 import Link from 'next/link';
+import { useSettings } from '@/contexts/SettingsContext';
 
 export default function Footer() {
+  const { settings, isLoading } = useSettings();
+  const siteName = isLoading ? "FurnishVerse" : settings.siteName || "FurnishVerse";
+  const tagline = isLoading ? "Futuristic furniture for modern living." : settings.tagline || "Futuristic furniture for modern living.";
+
   return (
     <footer className="border-t border-border/40 bg-background/95">
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <h3 className="text-lg font-headline font-semibold mb-3 text-primary">FurnishVerse</h3>
-            <p className="text-sm text-muted-foreground">Futuristic furniture for modern living.</p>
+            <h3 className="text-lg font-headline font-semibold mb-3 text-primary">{siteName}</h3>
+            <p className="text-sm text-muted-foreground">{tagline}</p>
           </div>
           <div>
             <h4 className="text-md font-semibold mb-3">Quick Links</h4>
@@ -27,7 +33,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-8 pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} FurnishVerse. All rights reserved. Designed with a futuristic touch.
+          &copy; {new Date().getFullYear()} {siteName}. All rights reserved. Designed with a futuristic touch.
         </div>
       </div>
     </footer>

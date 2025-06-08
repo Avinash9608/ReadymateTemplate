@@ -1,10 +1,11 @@
+
 "use client";
 
 import Link from 'next/link';
 import Logo from '@/components/shared/Logo';
 import ThemeToggle from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, LogIn, LogOut, PackageSearch } from 'lucide-react';
+import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings } from 'lucide-react'; // Added Settings icon
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -68,11 +69,18 @@ export default function Header() {
             </Link>
           )}
            {user?.isAdmin && (
-             <Link href="/admin/theme" passHref>
-              <Button variant="outline" size="sm" aria-label="Admin Settings">
-                <PackageSearch className="h-4 w-4 mr-1" /> Admin
-              </Button>
-            </Link>
+            <>
+              <Link href="/admin/theme" passHref>
+                <Button variant="outline" size="sm" aria-label="Admin Theme Settings">
+                  <PackageSearch className="h-4 w-4 mr-1" /> Theme
+                </Button>
+              </Link>
+               <Link href="/admin/settings" passHref>
+                <Button variant="outline" size="sm" aria-label="Admin Site Settings">
+                  <Settings className="h-4 w-4 mr-1" /> Site
+                </Button>
+              </Link>
+            </>
            )}
         </div>
       </div>
