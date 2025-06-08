@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Zap, Filter, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Sidebar, SidebarContent, SidebarHeader, SidebarTrigger } from '@/components/ui/sidebar'; // Assuming sidebar is available
+import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar'; // Added SidebarProvider
 
 const categories = Array.from(new Set(mockProducts.map(p => p.category)));
 
@@ -123,19 +124,21 @@ export default function ProductsPage() {
         <Button variant="outline" onClick={() => setIsFilterSidebarOpen(true)} className="w-full">
           <Filter className="mr-2 h-5 w-5" /> Show Filters
         </Button>
-        <Sidebar open={isFilterSidebarOpen} onOpenChange={setIsFilterSidebarOpen} side="left" variant='sidebar' collapsible='offcanvas'>
-            <SidebarHeader className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-xl font-headline font-semibold flex items-center">
-                <Filter className="mr-2 h-5 w-5" /> Filters
-              </h3>
-              <Button variant="ghost" size="icon" onClick={() => setIsFilterSidebarOpen(false)}>
-                <X className="h-5 w-5" />
-              </Button>
-            </SidebarHeader>
-            <SidebarContent>
-              <FilterControls />
-            </SidebarContent>
-        </Sidebar>
+        <SidebarProvider>
+          <Sidebar open={isFilterSidebarOpen} onOpenChange={setIsFilterSidebarOpen} side="left" variant='sidebar' collapsible='offcanvas'>
+              <SidebarHeader className="flex justify-between items-center p-4 border-b">
+                <h3 className="text-xl font-headline font-semibold flex items-center">
+                  <Filter className="mr-2 h-5 w-5" /> Filters
+                </h3>
+                <Button variant="ghost" size="icon" onClick={() => setIsFilterSidebarOpen(false)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </SidebarHeader>
+              <SidebarContent>
+                <FilterControls />
+              </SidebarContent>
+          </Sidebar>
+        </SidebarProvider>
       </div>
 
 
@@ -178,3 +181,4 @@ export default function ProductsPage() {
     </div>
   );
 }
+
