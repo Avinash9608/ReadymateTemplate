@@ -5,7 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSettings, type PageConfig, type PageComponent as PageComponentType } from '@/contexts/SettingsContext';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
+import Image from 'next/image';
+import Link from 'next/link';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea'; // Corrected import
 
 // Placeholder Dynamic Components
 const HeroBlock = ({ title, subtitle }: { title?: string, subtitle?: string }) => (
@@ -113,10 +118,8 @@ const componentMap: Record<string, React.FC<any>> = {
   ProductGrid: ProductGridBlock,
   TestimonialSlider: TestimonialSliderBlock,
   CallToAction: CallToActionBlock,
-  // Add other components here as they are defined
 };
 
-// Helper to render a single component
 const RenderComponent = ({ component }: { component: PageComponentType }) => {
   const ComponentToRender = componentMap[component.type];
   if (!ComponentToRender) {
@@ -135,18 +138,24 @@ export default function DynamicPage() {
   const params = useParams();
   const router = useRouter();
   const { getPageBySlug, isLoading: settingsLoading } = useSettings();
-  const [pageConfig, setPageConfig] = useState<PageConfig | null | undefined>(undefined); // undefined for loading, null for not found
+  const [pageConfig, setPageConfig] = useState<PageConfig | null | 'loading'>('loading');
 
   const slug = typeof params.slug === 'string' ? params.slug : params.slug?.[0];
 
   useEffect(() => {
-    if (!settingsLoading && slug) {
+    if (settingsLoading) {
+      setPageConfig('loading');
+      return;
+    }
+    if (slug) {
       const config = getPageBySlug(slug);
-      setPageConfig(config);
+      setPageConfig(config || null); // Set to config if found, otherwise null
+    } else {
+      setPageConfig(null); // No slug, so page not found
     }
   }, [slug, getPageBySlug, settingsLoading]);
 
-  if (settingsLoading || pageConfig === undefined) {
+  if (pageConfig === 'loading') {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -155,7 +164,7 @@ export default function DynamicPage() {
     );
   }
 
-  if (!pageConfig) {
+  if (pageConfig === null) { // Page explicitly not found or slug missing
     return (
       <div className="text-center py-20">
         <AlertTriangle className="mx-auto h-24 w-24 text-destructive mb-6" />
@@ -168,6 +177,7 @@ export default function DynamicPage() {
     );
   }
   
+  // At this point, pageConfig is a valid PageConfig object
   if (!pageConfig.isPublished) {
      return (
       <div className="text-center py-20">
@@ -181,12 +191,10 @@ export default function DynamicPage() {
     );
   }
 
-
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       <header className="mb-8">
         <h1 className="text-5xl font-bold font-headline text-glow-primary text-center">{pageConfig.title}</h1>
-        {/* Optional: Breadcrumbs or back button */}
       </header>
 
       {pageConfig.suggestedLayout && pageConfig.suggestedLayout.length > 0 ? (
@@ -199,17 +207,3 @@ export default function DynamicPage() {
     </div>
   );
 }
-
-// Minimal components for initial rendering
-// These would typically be in their own files in src/components/dynamic-page/
-// For brevity, they are included here initially.
-
-// Input and Label are needed if ContactFormBlock is used directly.
-// These are already ShadCN components, but let's add minimal versions if not globally available in this scope.
-// Assuming they are available through @/components/ui
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea }_from '@/components/ui/textarea'; // Assuming Textarea is also available
-import Image from 'next/image';
-import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
