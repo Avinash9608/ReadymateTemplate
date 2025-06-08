@@ -5,12 +5,13 @@ import Link from 'next/link';
 import Logo from '@/components/shared/Logo';
 import ThemeToggle from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings } from 'lucide-react'; // Added Settings icon
+import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List } from 'lucide-react'; // Added List for Navbar admin
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext'; // Added
 import { useRouter } from 'next/navigation';
 
-const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
+const NavLinkInternal = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <Link href={href} passHref>
     <Button variant="ghost" className="font-medium text-foreground hover:text-primary transition-colors">
       {children}
@@ -18,9 +19,19 @@ const NavLink = ({ href, children }: { href: string; children: React.ReactNode }
   </Link>
 );
 
+const NavLinkExternal = ({ href, children }: { href: string; children: React.ReactNode }) => (
+  <a href={href} target="_blank" rel="noopener noreferrer">
+    <Button variant="ghost" className="font-medium text-foreground hover:text-primary transition-colors">
+      {children}
+    </Button>
+  </a>
+);
+
+
 export default function Header() {
   const { cartItemCount } = useCart();
   const { user, logout } = useAuth();
+  const { settings, isLoading: settingsLoading } = useSettings(); // Get settings
   const router = useRouter();
 
   const handleLogout = () => {
@@ -28,15 +39,33 @@ export default function Header() {
     router.push('/');
   };
 
+  const visibleNavItems = settings.navItems
+    ?.filter(item => item.isVisible)
+    .sort((a, b) => a.order - b.order) || [];
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 flex h-16 max-w-screen-2xl items-center justify-between">
         <Logo />
         <nav className="hidden md:flex items-center space-x-2 lg:space-x-4">
-          <NavLink href="/">Home</NavLink>
-          <NavLink href="/products">Products</NavLink>
-          {/* <NavLink href="/about">About</NavLink> */}
-          {/* <NavLink href="/contact">Contact</NavLink> */}
+          {settingsLoading ? (
+            <>
+              <Button variant="ghost" className="animate-pulse w-20 h-8 bg-muted"></Button>
+              <Button variant="ghost" className="animate-pulse w-20 h-8 bg-muted"></Button>
+            </>
+          ) : (
+            visibleNavItems.map(item => 
+              item.type === 'internal' && item.slug ? (
+                <NavLinkInternal key={item.id} href={item.slug}>
+                  {item.label}
+                </NavLinkInternal>
+              ) : item.type === 'external' && item.externalUrl ? (
+                <NavLinkExternal key={item.id} href={item.externalUrl}>
+                  {item.label}
+                </NavLinkExternal>
+              ) : null
+            )
+          )}
         </nav>
         <div className="flex items-center space-x-2 sm:space-x-3">
           <ThemeToggle />
@@ -70,6 +99,11 @@ export default function Header() {
           )}
            {user?.isAdmin && (
             <>
+               <Link href="/admin/navbar" passHref>
+                <Button variant="outline" size="sm" aria-label="Admin Navbar Settings">
+                  <List className="h-4 w-4 mr-1" /> Nav
+                </Button>
+              </Link>
               <Link href="/admin/theme" passHref>
                 <Button variant="outline" size="sm" aria-label="Admin Theme Settings">
                   <PackageSearch className="h-4 w-4 mr-1" /> Theme

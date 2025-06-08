@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette } from 'lucide-react'; // Added SettingsIcon, Palette
+import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette, List } from 'lucide-react'; // Added List icon
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileNavItems = [
@@ -15,6 +15,7 @@ const profileNavItems = [
 ];
 
 const adminNavItems = [
+  { name: 'Navbar Settings', href: '/admin/navbar', icon: List }, // Added Navbar Settings
   { name: 'Theme Control', href: '/admin/theme', icon: Palette },
   { name: 'Site Settings', href: '/admin/settings', icon: SettingsIcon },
 ];
