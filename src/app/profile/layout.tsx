@@ -19,7 +19,7 @@ const adminNavItems = [
   { name: 'Theme Control', href: '/admin/theme', icon: Palette },
   { name: 'Site Settings', href: '/admin/settings', icon: SettingsIcon },
   { name: 'Create New Page', href: '/admin/pages/create', icon: FilePlus },
-  // Future: { name: 'Manage Pages', href: '/admin/pages', icon: Files },
+  { name: 'Manage Pages', href: '/admin/pages/manage', icon: Files },
 ];
 
 
@@ -95,3 +95,5 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+    

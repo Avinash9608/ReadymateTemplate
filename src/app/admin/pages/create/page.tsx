@@ -44,16 +44,14 @@ export default function CreatePage() {
     }
   });
 
-  const currentTitle = watch("title");
-
   // Auto-generate slug from title
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const title = event.target.value;
     setValue("title", title);
     const slug = title
       .toLowerCase()
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/[^a-z0-9-]/g, ''); // Remove non-alphanumeric characters except hyphens
+      .replace(/\s+/g, '-') 
+      .replace(/[^a-z0-9-]/g, ''); 
     setValue("slug", slug);
   };
 
@@ -92,9 +90,9 @@ export default function CreatePage() {
       : [{ id: `default-text-${Date.now()}`, type: 'TextContent', props: { placeholderContent: 'Edit this page to add content.' } }];
 
 
-    addPage({
+    const newPage = addPage({
       title: data.title,
-      slug: data.slug, // This is the URL part, e.g., "contact-us"
+      slug: data.slug, 
       pageType: data.pageType,
       layoutPrompt: data.layoutPrompt,
       suggestedLayout: pageLayout,
@@ -103,11 +101,10 @@ export default function CreatePage() {
 
     toast({
       title: "Page Created!",
-      description: `The page "${data.title}" created. Redirecting to add it to the navbar.`,
+      description: `The page "${data.title}" has been created. Redirecting to edit page...`,
     });
-    // Redirect to navbar settings with new page details to pre-fill the form
-    // The slug for the navbar item should be the full path, e.g., /pages/contact-us
-    router.push(`/admin/navbar?action=add&label=${encodeURIComponent(data.title)}&slug=${encodeURIComponent(`/pages/${data.slug}`)}&type=internal`);
+    
+    router.push(`/admin/pages/edit/${newPage.id}`); // Redirect to edit page using the new page's ID
     setIsSubmitting(false);
   };
 
@@ -197,7 +194,7 @@ export default function CreatePage() {
           <CardFooter className="flex justify-end">
             <Button type="submit" disabled={isSubmitting || isSuggestingLayout}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              {isSubmitting ? "Creating Page..." : "Create Page & Add to Nav"}
+              {isSubmitting ? "Creating Page..." : "Create Page & Edit"}
             </Button>
           </CardFooter>
         </form>
@@ -206,3 +203,4 @@ export default function CreatePage() {
   );
 }
 
+    

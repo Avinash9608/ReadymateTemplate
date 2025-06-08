@@ -21,7 +21,7 @@ export interface PageComponent {
 }
 
 export interface PageConfig {
-  id: string;
+  id: string; // Unique ID for the page itself
   title: string;
   slug: string;
   pageType: 'Standard' | 'Form' | 'Landing' | string; // Allow string for flexibility
@@ -38,7 +38,7 @@ export interface SiteSettings {
   logoLightUrl?: string;
   logoDarkUrl?: string;
   navItems?: NavItem[];
-  pages?: PageConfig[]; // Added for custom pages
+  pages?: PageConfig[];
 }
 
 interface SettingsContextState {
@@ -49,23 +49,24 @@ interface SettingsContextState {
   updateNavItem: (id: string, updates: Partial<NavItem>) => void;
   removeNavItem: (id: string) => void;
   reorderNavItems: (id: string, direction: 'up' | 'down') => void;
-  addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => string; // Returns new page ID
-  updatePage: (slug: string, updates: Partial<PageConfig>) => void;
+  addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => PageConfig; // Returns new page
+  updatePage: (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   getPageBySlug: (slug: string) => PageConfig | undefined;
+  getPageById: (id: string) => PageConfig | undefined; // Added
   getAllPages: () => PageConfig[];
-  deletePage: (slug: string) => void;
+  deletePage: (pageId: string) => void;
 }
 
 const defaultSettings: SiteSettings = {
   siteName: "FurnishVerse",
   tagline: "Your futuristic furniture destination.",
-  logoLightUrl: "", 
+  logoLightUrl: "",
   logoDarkUrl: "",
   navItems: [
     { id: 'home', label: 'Home', type: 'internal', slug: '/', order: 1, isVisible: true },
     { id: 'products', label: 'Products', type: 'internal', slug: '/products', order: 2, isVisible: true },
   ],
-  pages: [], // Initialize with empty pages array
+  pages: [],
 };
 
 const initialState: SettingsContextState = {
@@ -76,9 +77,10 @@ const initialState: SettingsContextState = {
   updateNavItem: () => null,
   removeNavItem: () => null,
   reorderNavItems: () => null,
-  addPage: () => '',
+  addPage: () => ({} as PageConfig),
   updatePage: () => null,
   getPageBySlug: () => undefined,
+  getPageById: () => undefined,
   getAllPages: () => [],
   deletePage: () => null,
 };
@@ -107,7 +109,7 @@ export function SettingsProvider({
           if (!parsedSettings.navItems || parsedSettings.navItems.length === 0) {
             parsedSettings.navItems = defaultSettings.navItems;
           }
-          if (!parsedSettings.pages) { // Ensure pages array exists
+          if (!parsedSettings.pages) {
             parsedSettings.pages = [];
           }
           setSettingsState(parsedSettings);
@@ -142,7 +144,7 @@ export function SettingsProvider({
         if (!newSettings.navItems) {
             newSettings.navItems = defaultSettings.navItems || [];
         }
-        if (!newSettings.pages) { // Ensure pages array exists on update
+        if (!newSettings.pages) {
             newSettings.pages = [];
         }
         return newSettings;
@@ -181,13 +183,9 @@ export function SettingsProvider({
       const itemIndex = items.findIndex(item => item.id === id);
       if (itemIndex === -1) return prev;
 
-      const item = items[itemIndex];
-      
       if (direction === 'up' && itemIndex > 0) {
-        const prevItem = items[itemIndex - 1];
         [items[itemIndex], items[itemIndex - 1]] = [items[itemIndex - 1], items[itemIndex]];
       } else if (direction === 'down' && itemIndex < items.length - 1) {
-        const nextItem = items[itemIndex + 1];
          [items[itemIndex], items[itemIndex + 1]] = [items[itemIndex + 1], items[itemIndex]];
       }
       
@@ -196,8 +194,7 @@ export function SettingsProvider({
     });
   };
 
-  // Page management functions
-  const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): string => {
+  const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): PageConfig => {
     const newPageId = Date.now().toString();
     const now = new Date().toISOString();
     const newPage: PageConfig = {
@@ -210,14 +207,14 @@ export function SettingsProvider({
       ...prev,
       pages: [...(prev.pages || []), newPage],
     }));
-    return newPageId;
+    return newPage;
   };
 
-  const updatePage = (slug: string, updates: Partial<PageConfig>) => {
+  const updatePage = (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => {
     setSettingsState(prev => ({
       ...prev,
       pages: prev.pages?.map(page =>
-        page.slug === slug ? { ...page, ...updates, updatedAt: new Date().toISOString() } : page
+        page.id === pageId ? { ...page, ...updates, slug: updates.slug || page.slug, updatedAt: new Date().toISOString() } : page
       ),
     }));
   };
@@ -225,15 +222,21 @@ export function SettingsProvider({
   const getPageBySlug = (slug: string): PageConfig | undefined => {
     return settings.pages?.find(page => page.slug === slug);
   };
+
+  const getPageById = (id: string): PageConfig | undefined => {
+    return settings.pages?.find(page => page.id === id);
+  };
   
   const getAllPages = (): PageConfig[] => {
     return settings.pages || [];
   };
 
-  const deletePage = (slug: string) => {
+  const deletePage = (pageId: string) => {
     setSettingsState(prev => ({
       ...prev,
-      pages: prev.pages?.filter(page => page.slug !== slug),
+      pages: prev.pages?.filter(page => page.id !== pageId),
+      // Optionally, also remove related navbar items
+      navItems: prev.navItems?.filter(item => !item.slug || !prev.pages?.find(p => p.id === pageId && `/pages/${p.slug}` === item.slug))
     }));
   };
 
@@ -248,6 +251,7 @@ export function SettingsProvider({
     addPage,
     updatePage,
     getPageBySlug,
+    getPageById,
     getAllPages,
     deletePage,
   };
@@ -266,3 +270,5 @@ export const useSettings = () => {
   }
   return context;
 };
+
+    
