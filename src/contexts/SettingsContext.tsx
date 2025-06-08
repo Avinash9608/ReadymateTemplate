@@ -45,7 +45,7 @@ interface SettingsContextState {
   settings: SiteSettings;
   setSettings: Dispatch<SetStateAction<SiteSettings>>;
   isLoading: boolean;
-  addNavItem: (item: Omit<NavItem, 'id' | 'order'>) => void;
+  addNavItem: (itemData: Omit<NavItem, 'id' | 'order'>) => void;
   updateNavItem: (id: string, updates: Partial<NavItem>) => void;
   removeNavItem: (id: string) => void;
   reorderNavItems: (id: string, direction: 'up' | 'down') => void;
@@ -106,20 +106,22 @@ export function SettingsProvider({
         const storedSettings = localStorage.getItem(storageKey);
         if (storedSettings) {
           const parsedSettings = JSON.parse(storedSettings);
-          if (!parsedSettings.navItems || parsedSettings.navItems.length === 0) {
-            parsedSettings.navItems = defaultSettings.navItems;
-          }
-          if (!parsedSettings.pages) {
-            parsedSettings.pages = [];
-          } else {
-            parsedSettings.pages = parsedSettings.pages.map((page: PageConfig) => ({
-              ...page,
-              suggestedLayout: (page.suggestedLayout || []).map((component: PageComponent) => ({
-                ...component,
-                props: component.props || { placeholderContent: `Content for ${component.type}` },
-              })),
-            }));
-          }
+          // Ensure navItems and pages are initialized correctly, including component IDs and props
+          parsedSettings.navItems = (parsedSettings.navItems || defaultSettings.navItems || []).map((item: NavItem, index: number) => ({
+            ...item,
+            id: item.id || `nav-${Date.now()}-${index}`, // Ensure ID
+            order: item.order || index + 1, // Ensure order
+          }));
+
+          parsedSettings.pages = (parsedSettings.pages || []).map((page: PageConfig, pageIndex: number) => ({
+            ...page,
+            id: page.id || `page-${Date.now()}-${pageIndex}`, // Ensure page ID
+            suggestedLayout: (page.suggestedLayout || []).map((component: PageComponent, compIndex: number) => ({
+              ...component,
+              id: component.id || `comp-${Date.now()}-${pageIndex}-${compIndex}`, // Ensure component ID
+              props: component.props || { placeholderContent: `Content for ${component.type}` },
+            })),
+          }));
           setSettingsState(parsedSettings);
         } else {
           localStorage.setItem(storageKey, JSON.stringify(defaultSettings));
@@ -159,30 +161,31 @@ export function SettingsProvider({
     });
   };
 
-  const addNavItem = (item: Omit<NavItem, 'id' | 'order'>) => {
+  const addNavItem = (itemData: Omit<NavItem, 'id' | 'order'>) => {
     setSettingsState(prev => {
-      const newNavItems = prev.navItems ? [...prev.navItems] : [];
-      const newItem: NavItem = {
-        ...item,
-        id: Date.now().toString(),
-        order: newNavItems.length > 0 ? Math.max(...newNavItems.map(i => i.order)) + 1 : 1,
+      const currentNavItems = prev.navItems || [];
+      const newNavItem: NavItem = {
+        ...itemData,
+        id: `nav-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`, // More unique ID
+        order: currentNavItems.length > 0 ? Math.max(0, ...currentNavItems.map(i => i.order)) + 1 : 1,
       };
-      return { ...prev, navItems: [...newNavItems, newItem] };
+      return { ...prev, navItems: [...currentNavItems, newNavItem] };
     });
   };
 
   const updateNavItem = (id: string, updates: Partial<NavItem>) => {
     setSettingsState(prev => ({
       ...prev,
-      navItems: prev.navItems?.map(item => (item.id === id ? { ...item, ...updates } : item)),
+      navItems: (prev.navItems || []).map(item => (item.id === id ? { ...item, ...updates } : item)),
     }));
   };
 
   const removeNavItem = (id: string) => {
-    setSettingsState(prev => ({
-      ...prev,
-      navItems: prev.navItems?.filter(item => item.id !== id).map((item, index) => ({ ...item, order: index + 1 })),
-    }));
+    setSettingsState(prev => {
+      const updatedNavItems = (prev.navItems || []).filter(item => item.id !== id)
+                                                 .map((item, index) => ({ ...item, order: index + 1 }));
+      return { ...prev, navItems: updatedNavItems };
+    });
   };
 
   const reorderNavItems = (id: string, direction: 'up' | 'down') => {
@@ -203,15 +206,16 @@ export function SettingsProvider({
   };
 
   const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): PageConfig => {
-    const newPageId = Date.now().toString();
+    const newPageId = `page-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     const newPage: PageConfig = {
       ...pageData,
       id: newPageId,
       createdAt: now,
       updatedAt: now,
-      suggestedLayout: (pageData.suggestedLayout || []).map(comp => ({
+      suggestedLayout: (pageData.suggestedLayout || []).map((comp, index) => ({
         ...comp,
+        id: comp.id || `comp-${newPageId}-${index}-${Math.random().toString(36).substring(2, 7)}`,
         props: comp.props || { placeholderContent: `Default content for ${comp.type}` }
       }))
     };
@@ -226,18 +230,15 @@ export function SettingsProvider({
     setSettingsState(prev => {
       const newPagesArray = (prev.pages || []).map(page => {
         if (page.id === pageId) {
-          // Create the updated page by merging current page with all updates.
-          // If 'updates' includes 'suggestedLayout', it will overwrite the one from 'page'.
           const newPageData = {
             ...page,
             ...updates, 
             updatedAt: new Date().toISOString(),
           };
   
-          // Ensure the final suggestedLayout (whether from 'updates' or original 'page')
-          // has props initialized for each component.
-          newPageData.suggestedLayout = (newPageData.suggestedLayout || []).map(comp => ({
+          newPageData.suggestedLayout = (newPageData.suggestedLayout || []).map((comp, index) => ({
             ...comp,
+            id: comp.id || `comp-${pageId}-${index}-${Math.random().toString(36).substring(2, 7)}`,
             props: comp.props || { placeholderContent: `Content for ${comp.type}` }
           }));
           
@@ -249,25 +250,46 @@ export function SettingsProvider({
     });
   };
   
+  const deletePage = (pageId: string) => {
+    setSettingsState(prev => {
+      const pagesBeforeDelete = prev.pages || [];
+      const pageToDeleteDetails = pagesBeforeDelete.find(p => p.id === pageId);
+
+      if (!pageToDeleteDetails) {
+        return prev; // Page not found, nothing to change
+      }
+
+      const updatedPages = pagesBeforeDelete.filter(page => page.id !== pageId);
+      
+      let updatedNavItems = prev.navItems || [];
+      const deletedPageNavSlug = `/pages/${pageToDeleteDetails.slug}`;
+      
+      updatedNavItems = updatedNavItems.filter(item => {
+        return !(item.type === 'internal' && item.slug === deletedPageNavSlug);
+      });
+      updatedNavItems = updatedNavItems.map((item, index) => ({ ...item, order: index + 1 }));
+
+      return {
+        ...prev,
+        pages: updatedPages,
+        navItems: updatedNavItems,
+      };
+    });
+  };
 
   const getPageBySlug = (slug: string): PageConfig | undefined => {
+    if (isLoading) return undefined; // Don't return pages if still loading, might be stale
     return settings.pages?.find(page => page.slug === slug);
   };
 
   const getPageById = (id: string): PageConfig | undefined => {
+    if (isLoading) return undefined;
     return settings.pages?.find(page => page.id === id);
   };
   
   const getAllPages = (): PageConfig[] => {
+    if (isLoading) return [];
     return settings.pages || [];
-  };
-
-  const deletePage = (pageId: string) => {
-    setSettingsState(prev => ({
-      ...prev,
-      pages: prev.pages?.filter(page => page.id !== pageId),
-      navItems: prev.navItems?.filter(item => !item.slug || !prev.pages?.find(p => p.id === pageId && `/pages/${p.slug}` === item.slug))
-    }));
   };
 
   const value = {
@@ -300,4 +322,3 @@ export const useSettings = () => {
   }
   return context;
 };
-

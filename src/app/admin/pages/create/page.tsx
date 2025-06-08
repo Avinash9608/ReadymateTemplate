@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, PlusCircle, Sparkles, LayoutList } from 'lucide-react';
 import { suggestPageLayout, type PageLayoutSuggestionOutput } from '@/ai/flows/page-layout-suggestion-flow';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch'; // Added for Publish switch
 
 const pageSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -29,7 +30,7 @@ const pageSchema = z.object({
 type PageFormValues = z.infer<typeof pageSchema>;
 
 export default function CreatePage() {
-  const { addPage, getPageBySlug } = useSettings();
+  const { addPage, getPageBySlug, addNavItem } = useSettings(); // Added addNavItem
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,7 +45,6 @@ export default function CreatePage() {
     }
   });
 
-  // Auto-generate slug from title
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const title = event.target.value;
     setValue("title", title);
@@ -54,7 +54,6 @@ export default function CreatePage() {
       .replace(/[^a-z0-9-]/g, ''); 
     setValue("slug", slug);
   };
-
 
   const handleSuggestLayout = async () => {
     const { pageType, layoutPrompt } = watch();
@@ -79,16 +78,24 @@ export default function CreatePage() {
   const onSubmit: SubmitHandler<PageFormValues> = async (data) => {
     setIsSubmitting(true);
 
-    if (getPageBySlug(data.slug)) {
+    const existingPage = getPageBySlug(data.slug);
+    if (existingPage) {
       toast({ title: "Slug already exists", description: "Please choose a unique slug for the page URL part.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
     
     const pageLayout: PageComponent[] = suggestedComponents 
-      ? suggestedComponents.map((type, index) => ({ id: `${type.toLowerCase()}-${index}-${Date.now()}`, type, props: { placeholderContent: `Placeholder for ${type}` } }))
-      : [{ id: `default-text-${Date.now()}`, type: 'TextContent', props: { placeholderContent: 'Edit this page to add content.' } }];
-
+      ? suggestedComponents.map((type, index) => ({ 
+          id: `${type.toLowerCase().replace(/\s+/g, '-')}-${index}-${Date.now()}`, 
+          type, 
+          props: { placeholderContent: `Placeholder for ${type}` } 
+        }))
+      : [{ 
+          id: `default-text-${Date.now()}`, 
+          type: 'TextContent', 
+          props: { placeholderContent: 'Edit this page to add content.' } 
+        }];
 
     const newPage = addPage({
       title: data.title,
@@ -99,12 +106,25 @@ export default function CreatePage() {
       isPublished: data.isPublished,
     });
 
-    toast({
-      title: "Page Created!",
-      description: `The page "${data.title}" has been created. Redirecting to edit page...`,
-    });
+    if (data.isPublished) {
+      addNavItem({
+        label: newPage.title,
+        type: 'internal',
+        slug: `/pages/${newPage.slug}`,
+        isVisible: true,
+      });
+      toast({
+        title: "Page Created & Published!",
+        description: `The page "${newPage.title}" has been created and added to the navbar. Redirecting to edit...`,
+      });
+    } else {
+      toast({
+        title: "Page Created as Draft!",
+        description: `The page "${newPage.title}" has been created as a draft. Redirecting to edit...`,
+      });
+    }
     
-    router.push(`/admin/pages/edit/${newPage.id}`); // Redirect to edit page using the new page's ID
+    router.push(`/admin/pages/edit/${newPage.id}`);
     setIsSubmitting(false);
   };
 
@@ -190,6 +210,17 @@ export default function CreatePage() {
                 <p className="text-sm text-muted-foreground">AI could not determine specific components. A default text block will be added.</p>
             )}
 
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch
+                id="isPublished"
+                checked={watch("isPublished")}
+                onCheckedChange={(checked) => setValue("isPublished", checked)}
+              />
+              <Label htmlFor="isPublished" className="cursor-pointer">
+                Publish this page (and add to navbar if not already present)
+              </Label>
+            </div>
+
           </CardContent>
           <CardFooter className="flex justify-end">
             <Button type="submit" disabled={isSubmitting || isSuggestingLayout}>
@@ -202,5 +233,3 @@ export default function CreatePage() {
     </div>
   );
 }
-
-    
