@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent, Suspense } from 'react';
 import { useSettings, type NavItem } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,41 +11,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, ArrowUp, ArrowDown, LinkIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type NavItemFormData = Omit<NavItem, 'id' | 'order'>;
 
-export default function AdminNavbarPage() {
-  const { settings, addNavItem, updateNavItem, removeNavItem, reorderNavItems, isLoading: settingsLoading } = useSettings();
-  const { toast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+interface NavbarFormProps {
+  isEditing: string | null;
+  setIsEditing: React.Dispatch<React.SetStateAction<string | null>>;
+  formData: NavItemFormData;
+  setFormData: React.Dispatch<React.SetStateAction<NavItemFormData>>;
+  paramsProcessed: boolean;
+  setParamsProcessed: React.Dispatch<React.SetStateAction<boolean>>;
+  updateNavItem: (id: string, data: Partial<NavItemFormData>) => void;
+  addNavItem: (data: NavItemFormData) => void;
+  resetForm: () => void;
+}
+
+function NavbarForm({
+  isEditing,
+  setIsEditing,
+  formData,
+  setFormData,
+  paramsProcessed,
+  setParamsProcessed,
+  updateNavItem,
+  addNavItem,
+  resetForm,
+}: NavbarFormProps) {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const searchParams = useSearchParams(); // For reading query parameters
-
-  const [isEditing, setIsEditing] = useState<string | null>(null);
-  const [formData, setFormData] = useState<NavItemFormData>({
-    label: '',
-    type: 'internal',
-    slug: '/',
-    externalUrl: '',
-    isVisible: true,
-  });
-  const [paramsProcessed, setParamsProcessed] = useState(false); // To ensure params are processed only once
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && (!user || !user.isAdmin)) {
-      toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-      router.push('/');
-    }
-  }, [user, authLoading, router, toast]);
-
-  // Effect to pre-fill form from query parameters (e.g., after creating a page)
-  useEffect(() => {
-    if (paramsProcessed || isEditing) return; // Don't process if already done or if user is actively editing
+    if (paramsProcessed || isEditing) return;
 
     const action = searchParams.get('action');
     const label = searchParams.get('label');
-    const slugFromParams = searchParams.get('slug'); // This will be the full path e.g. /pages/contact
+    const slugFromParams = searchParams.get('slug');
     const typeFromParams = searchParams.get('type') as 'internal' | 'external' | null;
 
     if (action === 'add' && label && slugFromParams && typeFromParams === 'internal') {
@@ -57,16 +58,14 @@ export default function AdminNavbarPage() {
         externalUrl: '',
         isVisible: true,
       });
-      setIsEditing(null); // Ensure we are in "add new" mode
+      setIsEditing(null);
       toast({ title: "Ready to Add Nav Item", description: `Details for page "${label}" pre-filled.` });
-      
-      // Clear query params to prevent re-processing on refresh or back navigation
+
       const currentPath = window.location.pathname;
-      router.replace(currentPath, { scroll: false }); 
+      router.replace(currentPath, { scroll: false });
       setParamsProcessed(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, router, paramsProcessed, isEditing, toast]); // setFormData & setIsEditing are stable from useState
+  }, [searchParams, router, paramsProcessed, isEditing, toast, setFormData, setIsEditing, setParamsProcessed]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -106,6 +105,86 @@ export default function AdminNavbarPage() {
     resetForm();
   };
 
+  return (
+    <Suspense fallback={<div>Loading Form...</div>}>
+      <Card className="shadow-xl sticky top-24">
+        <CardHeader>
+          <CardTitle className="text-xl font-headline flex items-center">
+            {isEditing ? <Edit3 className="mr-2 h-5 w-5" /> : <PlusCircle className="mr-2 h-5 w-5" />}
+            {isEditing ? 'Edit Navbar Item' : 'Add New Navbar Item'}
+          </CardTitle>
+          <CardDescription>{isEditing ? 'Modify the details of the selected item.' : 'Create a new link for your site navigation.'}</CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="label">Label</Label>
+              <Input id="label" name="label" value={formData.label} onChange={handleInputChange} placeholder="e.g., Home, About Us" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="type">Link Type</Label>
+              <Select value={formData.type} onValueChange={handleTypeChange}>
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Select link type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Internal Page (Slug)</SelectItem>
+                  <SelectItem value="external">External URL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {formData.type === 'internal' ? (
+              <div className="space-y-1">
+                <Label htmlFor="slug">Slug</Label>
+                <Input id="slug" name="slug" value={formData.slug} onChange={handleInputChange} placeholder="e.g., /about, /pages/contact" />
+                <p className="text-xs text-muted-foreground">For custom pages, use /pages/your-slug.</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label htmlFor="externalUrl">External URL</Label>
+                <Input id="externalUrl" name="externalUrl" type="url" value={formData.externalUrl} onChange={handleInputChange} placeholder="e.g., https://example.com" />
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2">
+              <Label htmlFor="isVisible" className="cursor-pointer">Visible</Label>
+              <Switch id="isVisible" name="isVisible" checked={formData.isVisible} onCheckedChange={handleSwitchChange} />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col sm:flex-row justify-end gap-2">
+            {isEditing && <Button type="button" variant="outline" onClick={resetForm}>Cancel Edit</Button>}
+            <Button type="submit">
+              {isEditing ? 'Save Changes' : 'Add Item'}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+    </Suspense>
+  );
+}
+
+export default function AdminNavbarPage() {
+  const { settings, addNavItem, updateNavItem, removeNavItem, reorderNavItems, isLoading: settingsLoading } = useSettings();
+  const { toast } = useToast();
+  const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [formData, setFormData] = useState<NavItemFormData>({
+    label: '',
+    type: 'internal',
+    slug: '/',
+    externalUrl: '',
+    isVisible: true,
+  });
+  const [paramsProcessed, setParamsProcessed] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && (!user || !user.isAdmin)) {
+      toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
+      router.push('/');
+    }
+  }, [user, authLoading, router, toast]);
+
   const handleEdit = (item: NavItem) => {
     setIsEditing(item.id);
     setFormData({
@@ -115,13 +194,13 @@ export default function AdminNavbarPage() {
       externalUrl: item.externalUrl || '',
       isVisible: item.isVisible,
     });
-    setParamsProcessed(true); // Prevent query params from overwriting an edit in progress
+    setParamsProcessed(true);
   };
 
   const resetForm = () => {
     setIsEditing(null);
     setFormData({ label: '', type: 'internal', slug: '/', externalUrl: '', isVisible: true });
-    setParamsProcessed(false); // Allow params to be processed again if navigated with new ones
+    setParamsProcessed(false);
   };
 
   const sortedNavItems = settings.navItems ? [...settings.navItems].sort((a, b) => a.order - b.order) : [];
@@ -134,57 +213,17 @@ export default function AdminNavbarPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="grid md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
-          <Card className="shadow-xl sticky top-24">
-            <CardHeader>
-              <CardTitle className="text-xl font-headline flex items-center">
-                {isEditing ? <Edit3 className="mr-2 h-5 w-5" /> : <PlusCircle className="mr-2 h-5 w-5" />}
-                {isEditing ? 'Edit Navbar Item' : 'Add New Navbar Item'}
-              </CardTitle>
-              <CardDescription>{isEditing ? 'Modify the details of the selected item.' : 'Create a new link for your site navigation.'}</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <Label htmlFor="label">Label</Label>
-                  <Input id="label" name="label" value={formData.label} onChange={handleInputChange} placeholder="e.g., Home, About Us" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="type">Link Type</Label>
-                  <Select value={formData.type} onValueChange={handleTypeChange}>
-                    <SelectTrigger id="type">
-                      <SelectValue placeholder="Select link type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Internal Page (Slug)</SelectItem>
-                      <SelectItem value="external">External URL</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {formData.type === 'internal' ? (
-                  <div className="space-y-1">
-                    <Label htmlFor="slug">Slug</Label>
-                    <Input id="slug" name="slug" value={formData.slug} onChange={handleInputChange} placeholder="e.g., /about, /pages/contact" />
-                     <p className="text-xs text-muted-foreground">For custom pages, use /pages/your-slug.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Label htmlFor="externalUrl">External URL</Label>
-                    <Input id="externalUrl" name="externalUrl" type="url" value={formData.externalUrl} onChange={handleInputChange} placeholder="e.g., https://example.com" />
-                  </div>
-                )}
-                <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="isVisible" className="cursor-pointer">Visible</Label>
-                  <Switch id="isVisible" name="isVisible" checked={formData.isVisible} onCheckedChange={handleSwitchChange} />
-                </div>
-              </CardContent>
-              <CardFooter className="flex flex-col sm:flex-row justify-end gap-2">
-                {isEditing && <Button type="button" variant="outline" onClick={resetForm}>Cancel Edit</Button>}
-                <Button type="submit">
-                  {isEditing ? 'Save Changes' : 'Add Item'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
+          <NavbarForm
+            isEditing={isEditing}
+            setIsEditing={setIsEditing}
+            formData={formData}
+            setFormData={setFormData}
+            paramsProcessed={paramsProcessed}
+            setParamsProcessed={setParamsProcessed}
+            updateNavItem={updateNavItem}
+            addNavItem={addNavItem}
+            resetForm={resetForm}
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -214,7 +253,11 @@ export default function AdminNavbarPage() {
                         <Button variant="outline" size="icon" onClick={() => handleEdit(item)} title="Edit Item">
                           <Edit3 className="h-4 w-4" />
                         </Button>
-                        <Button variant="destructive" size="icon" onClick={() => { removeNavItem(item.id); toast({ title: "Item Removed", description: `"${item.label}" was removed.`}); if (isEditing === item.id) resetForm(); }} title="Delete Item">
+                        <Button variant="destructive" size="icon" onClick={() => { 
+                          removeNavItem(item.id); 
+                          toast({ title: "Item Removed", description: `"${item.label}" was removed.`}); 
+                          if (isEditing === item.id) resetForm(); 
+                        }} title="Delete Item">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -231,4 +274,3 @@ export default function AdminNavbarPage() {
     </div>
   );
 }
-
