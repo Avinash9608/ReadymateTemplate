@@ -15,7 +15,7 @@ export type Product = {
   stock: number;
   createdAt: string; // ISO string or Timestamp
   updatedAt: string; // ISO string or Timestamp
-  dataAiHint?: string; 
+  dataAiHint?: string;
 };
 
 // Mock products are removed. Data will come from a database.
@@ -23,7 +23,8 @@ export type Product = {
 export const getProductBySlug = async (slug: string): Promise<Product | undefined> => {
   // Placeholder: In a real app, fetch from Firestore by slug
   console.warn(`getProductBySlug: Fetching product by slug "${slug}" - database not implemented yet.`);
-  return undefined; 
+  // Example: if (slug === 'quantum-sofa') return MOCK_PRODUCTS[0];
+  return undefined;
 };
 
 export const getProducts = async (filters?: { category?: string; status?: string; limit?: number }): Promise<Product[]> => {
@@ -36,5 +37,5 @@ export const getProducts = async (filters?: { category?: string; status?: string
 export const getCategories = async (): Promise<string[]> => {
   // Placeholder: Fetch from a categories collection or derive from products
   console.warn("getCategories: Fetching categories - database not implemented yet.");
-  return ["Living Room", "Bedroom", "Office", "Dining"]; // Placeholder
+  return ["Living Room", "Bedroom", "Office", "Dining", "Outdoor"]; // Placeholder
 };

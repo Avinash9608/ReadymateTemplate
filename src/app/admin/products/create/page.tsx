@@ -24,7 +24,8 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required"),
   status: z.enum(["new", "old", "draft", "archived"]).default("draft"),
   stock: z.coerce.number().min(0, "Stock cannot be negative").default(0),
-  // image: typeof window === 'undefined' ? z.any() : z.instanceof(FileList).optional(), // For file upload later
+  image: z.instanceof(FileList).optional(), // Accept FileList, make it optional for now
+  dataAiHint: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -62,21 +63,49 @@ export default function CreateProductPage() {
       .replace(/\s+/g, '-') 
       .replace(/[^a-z0-9-]/g, ''); 
     setValue("slug", slug);
+    if (!watch("dataAiHint")) {
+      setValue("dataAiHint", name.split(" ").slice(0, 2).join(" ").toLowerCase());
+    }
   };
 
   const onSubmit: SubmitHandler<ProductFormValues> = async (data) => {
     setIsSubmitting(true);
-    console.log("Submitting product data (mock):", data);
+    
+    let productPayload: any = { ...data };
+    delete productPayload.image; // Remove FileList from payload to be "saved"
+
+    if (data.image && data.image.length > 0) {
+      const imageFile = data.image[0];
+      // ** SIMULATE UPLOAD AND URL GENERATION **
+      // In a real app, you would upload imageFile to Firebase Storage here
+      // and get back the actual URL and path.
+      const simulatedFileName = `${Date.now()}-${imageFile.name.replace(/\s+/g, '_')}`;
+      productPayload.imageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(imageFile.name.substring(0,15))}`; // Placeholder URL
+      productPayload.imagePath = `products/images/${simulatedFileName}`; // Placeholder path
+
+      console.log("Simulated image upload for:", imageFile.name);
+      console.log("Generated imageUrl (placeholder):", productPayload.imageUrl);
+      console.log("Generated imagePath (placeholder):", productPayload.imagePath);
+      // ** END SIMULATION **
+    } else {
+        // Default placeholder if no image is selected
+        productPayload.imageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0,15))}`;
+        productPayload.dataAiHint = data.name.split(" ").slice(0,2).join(" ").toLowerCase();
+    }
+
+
+    console.log("Submitting product data (mock):", productPayload);
 
     // Placeholder for actual product creation logic (e.g., API call to save to DB)
+    // Example: const newProduct = await addProductToDB(productPayload);
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     toast({
       title: "Product Created (Mock)!",
-      description: `The product "${data.name}" has been notionally created.`,
+      description: `The product "${data.name}" has been notionally created. Image URL is simulated.`,
     });
     
-    // router.push(`/admin/products/edit/${newPage.id}`); // Redirect to edit page of the new product
+    // router.push(`/admin/products/edit/${newProduct.id}`); // Redirect to edit page of the new product
     router.push('/admin/products/manage'); // Or redirect to manage page
     setIsSubmitting(false);
   };
@@ -89,7 +118,7 @@ export default function CreateProductPage() {
             <ShoppingBag className="h-10 w-10 text-primary" />
             <div>
               <CardTitle className="text-2xl font-headline">Create New Product</CardTitle>
-              <CardDescription>Add a new product to your catalog. Image upload will be added later.</CardDescription>
+              <CardDescription>Add a new product to your catalog. Image upload is simulated.</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -177,12 +206,25 @@ export default function CreateProductPage() {
                 {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
               </div>
             </div>
+            
+            <div className="space-y-2">
+                <Label htmlFor="dataAiHint">Image AI Hint (Optional)</Label>
+                <Input 
+                    id="dataAiHint" 
+                    {...register("dataAiHint")} 
+                    placeholder="e.g., modern sofa, futuristic chair (max 2 words)" 
+                />
+                <p className="text-xs text-muted-foreground">Keywords for AI image search if no image is uploaded. Auto-filled from name if empty.</p>
+                {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
+            </div>
 
-             {/* Placeholder for Image Upload - to be implemented */}
             <div className="space-y-2">
                 <Label htmlFor="image">Product Image</Label>
-                <Input id="image" type="file" disabled accept="image/*" />
-                <p className="text-xs text-muted-foreground">Direct image upload functionality will be added soon. For now, image URLs will be handled via database editing.</p>
+                <Input id="image" type="file" {...register("image")} accept="image/*" />
+                <p className="text-xs text-muted-foreground">
+                    Select an image for the product. Actual upload to Firebase Storage needs backend implementation.
+                </p>
+                {errors.image && <p className="text-sm text-destructive">{errors.image.message}</p>}
             </div>
 
           </CardContent>

@@ -34,9 +34,9 @@ export default function ManageProductsPage() {
     async function loadProducts() {
       setIsLoading(true);
       try {
-        // This will be an empty array until DB is implemented
+        // This will be an empty array until DB is implemented and products are added
         const fetchedProducts = await getProducts(); 
-        setProducts(fetchedProducts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setProducts(fetchedProducts.sort((a,b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
       } catch (error) {
         console.error("Failed to fetch products:", error);
         toast({ title: "Error", description: "Could not load products.", variant: "destructive" });
@@ -54,9 +54,10 @@ export default function ManageProductsPage() {
 
   const executeDeleteProduct = async () => {
     if (productToDelete) {
-      // Placeholder for actual delete logic
+      // Placeholder for actual delete logic (e.g., call an API to delete from DB and Firebase Storage)
       console.log("Deleting product (mock):", productToDelete.id);
-      // setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+      // Example: await deleteProductFromDB(productToDelete.id, productToDelete.imagePath);
+      // setProducts(prev => prev.filter(p => p.id !== productToDelete.id)); // Update UI optimistically or after confirmation
       toast({
         title: "Product Deleted (Mock)",
         description: `The product "${productToDelete.name}" has been notionally deleted.`,
@@ -69,7 +70,8 @@ export default function ManageProductsPage() {
   const togglePublishStatus = async (product: Product) => {
     // Placeholder for actual status update logic
     console.log("Toggling status (mock) for:", product.id, "to", product.status === 'draft' ? 'new' : 'draft');
-    // setProducts(prev => prev.map(p => p.id === product.id ? {...p, status: product.status === 'draft' ? 'new' : 'draft'} : p));
+    // Example: await updateProductInDB(product.id, { status: newStatus });
+    // setProducts(prev => prev.map(p => p.id === product.id ? {...p, status: newStatus} : p)); // Update UI
     toast({
       title: "Product Updated (Mock)",
       description: `"${product.name}" status notionally updated.`,
@@ -122,8 +124,8 @@ export default function ManageProductsPage() {
                       <TableCell>
                         <Image 
                           src={product.imageUrl || `https://placehold.co/64x64.png?text=${product.name.substring(0,1)}`} 
-                          alt={product.name}
-                          data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ")}
+                          alt={product.name} 
+                          data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ").toLowerCase()}
                           width={64} height={64} 
                           className="rounded-md object-cover aspect-square"
                         />
@@ -132,16 +134,25 @@ export default function ManageProductsPage() {
                       <TableCell className="text-muted-foreground">{product.category}</TableCell>
                       <TableCell className="text-muted-foreground">${product.price.toFixed(2)}</TableCell>
                       <TableCell>
-                        <Badge variant={product.status === 'new' || product.status === 'draft' ? 'default' : 'outline'} className="capitalize">
+                        <Badge 
+                            variant={product.status === 'new' || product.status === 'old' ? 'default' : 
+                                     product.status === 'draft' ? 'secondary' : 'outline'} 
+                            className="capitalize"
+                        >
                           {product.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => togglePublishStatus(product)} title={product.status === 'draft' ? "Publish" : "Unpublish"}>
-                          {product.status === 'draft' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => togglePublishStatus(product)} 
+                            title={product.status === 'draft' || product.status === 'archived' ? "Publish" : "Unpublish (Draft)"}
+                        >
+                          {product.status === 'draft' || product.status === 'archived' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         </Button>
                         <Link href={`/admin/products/edit/${product.id}`} passHref>
-                          <Button variant="outline" size="icon" title="Edit Product">
+                          <Button variant="outline" size="icon" title="Edit Product" disabled>
                             <Edit className="h-4 w-4" />
                           </Button>
                         </Link>
@@ -169,11 +180,12 @@ export default function ManageProductsPage() {
               <AlertDialogTitle>Are you sure you want to delete this product?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the product titled "<strong>{productToDelete.name}</strong>".
+                Actual deletion from database and storage requires backend implementation.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={executeDeleteProduct}>Delete Product</AlertDialogAction>
+              <AlertDialogAction onClick={executeDeleteProduct}>Delete Product (Mock)</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         )}
