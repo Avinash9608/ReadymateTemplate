@@ -346,22 +346,17 @@ export default function EditPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
-                    <Controller
-                        name="addComponentType" 
-                        control={control}
-                        render={({ field }) => (
-                            <Select onValueChange={(value) => handleAddComponent(value as AvailableComponentType)} value="">
-                                <SelectTrigger id="addComponentType" className="flex-grow">
-                                    <SelectValue placeholder="Add a new component..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableComponentTypes.map(type => (
-                                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
+ <Select onValueChange={(value) => handleAddComponent(value as AvailableComponentType)} value="">
+ <SelectTrigger id="addComponentType" className="flex-grow">
+ <SelectValue placeholder="Add a new component..." />
+ </SelectTrigger>
+ <SelectContent>
+                    {availableComponentTypes.map(type => (
+ <SelectItem key={type} value={type}>{type}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+
                 </div>
 
                 {currentLayout.length > 0 ? (

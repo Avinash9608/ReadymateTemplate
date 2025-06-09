@@ -26,7 +26,9 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required"),
   status: z.enum(["new", "old", "draft", "archived"]).default("draft"),
   stock: z.coerce.number().min(0, "Stock cannot be negative").default(0),
-  image: z.instanceof(FileList).optional(),
+  image: typeof window !== 'undefined'
+    ? z.instanceof(FileList).optional()
+    : z.undefined(),
   dataAiHint: z.string().max(200, "AI hint should be concise (max 200 chars)").optional(),
   features: z.string().optional().describe("Comma-separated list of product features"),
   dimensions: z.string().optional(),

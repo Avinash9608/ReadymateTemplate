@@ -203,10 +203,8 @@ export default function ProductsPage() {
         <Button variant="outline" onClick={() => setIsFilterSidebarOpen(true)} className="w-full">
           <Filter className="mr-2 h-5 w-5" /> Show Filters
         </Button>
-        <SidebarProvider>
-          <Sidebar 
-            open={isFilterSidebarOpen} 
-            onOpenChange={setIsFilterSidebarOpen} 
+ <SidebarProvider>
+ <Sidebar
             side="left" 
             variant="sidebar" 
             collapsible="offcanvas"

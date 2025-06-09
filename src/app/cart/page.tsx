@@ -35,7 +35,7 @@ export default function CartPage() {
           {items.map(item => (
             <Card key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center p-4 gap-4 shadow-sm hover:shadow-md transition-shadow">
               <Image 
-                src={item.imageUrl} 
+                src={item.imageUrl || ''} 
                 alt={item.name} 
                 data-ai-hint={item.dataAiHint || 'cart item'}
                 width={120} 

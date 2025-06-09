@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from 'react'; // Import Suspense
+import { useState, Suspense } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,7 +13,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import Image from 'next/image';
+import Image, { type StaticImageData } from 'next/image';
 import Link from 'next/link';
 
 const checkoutSchema = z.object({
@@ -26,6 +26,15 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
+
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  imageUrl: string | StaticImageData;
+  dataAiHint?: string;
+};
 
 export default function CheckoutPage() {
   const { items, cartTotal, clearCart } = useCart();
@@ -45,17 +54,17 @@ export default function CheckoutPage() {
     console.log("Order placed:", data, items);
     toast({
       title: "Order Placed!",
-      description: "Your order has been successfully placed. Thank you for shopping with FurnishVerse!",
+      description: "Your order has been successfully placed. Thank you for shopping with CommerceFlow!",
       variant: "default",
       className: "bg-primary text-primary-foreground"
     });
     clearCart();
-    router.push('/profile/orders'); // Or a thank you page
+    router.push('/profile/orders');
     setIsProcessing(false);
   };
 
   if (items.length === 0 && !isProcessing) {
-     router.push('/cart'); // Redirect if cart is empty and not processing
+     router.push('/cart');
      return null;
   }
 
@@ -136,10 +145,17 @@ export default function CheckoutPage() {
                     <CardTitle>Your Order</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {items.map(item => (
+                    {(items as CartItem[]).map(item => (
                         <div key={item.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <Image src={item.imageUrl} alt={item.name} data-ai-hint={item.dataAiHint || 'checkout item'} width={40} height={40} className="rounded object-cover" />
+                                <Image 
+                                  src={item.imageUrl} 
+                                  alt={item.name} 
+                                  width={40} 
+                                  height={40} 
+                                  className="rounded object-cover" 
+                                  {...(item.dataAiHint ? { 'data-ai-hint': item.dataAiHint } : {})}
+                                />
                                 <div>
                                     <p className="font-medium line-clamp-1">{item.name}</p>
                                     <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>

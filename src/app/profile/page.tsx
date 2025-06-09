@@ -9,7 +9,7 @@ import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, UserCircle2 } from 'lucide-react';
 
 const profileSchema = z.object({
@@ -33,7 +33,7 @@ export default function ProfilePage() {
   });
 
   // Reset form if user data changes (e.g., after initial load)
-  useState(() => {
+  useEffect(() => {
     if (user) {
       reset({ name: user.name || '', email: user.email || '' });
     }
