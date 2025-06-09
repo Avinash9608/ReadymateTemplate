@@ -1,13 +1,14 @@
+
 "use client";
 
 import { useParams, useRouter } from 'next/navigation';
-import { getProductBySlug, type Product as ProductType } from '@/lib/products';
+import { getProductBySlug, type Product as ProductType } from '@/lib/products'; // Updated
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import ProductRecommendations from '@/components/ai/ProductRecommendations';
-import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize } from 'lucide-react';
+import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize, Loader2, AlertTriangle } from 'lucide-react'; // Added Loader2, AlertTriangle
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useEffect, useState } from 'react';
@@ -18,36 +19,60 @@ export default function ProductDetailPage() {
   const { toast } = useToast();
   const { addItem } = useCart();
   
-  const [product, setProduct] = useState<ProductType | null>(null);
+  const [product, setProduct] = useState<ProductType | null | undefined>(undefined); // undefined for loading state
+  const [isLoading, setIsLoading] = useState(true);
   const [browsingHistoryForAI, setBrowsingHistoryForAI] = useState<string>("");
 
   useEffect(() => {
-    if (params.id) {
-      const slug = Array.isArray(params.id) ? params.id[0] : params.id;
-      const foundProduct = getProductBySlug(slug);
-      if (foundProduct) {
-        setProduct(foundProduct);
-        // Update browsing history for AI (simple example)
-        // In a real app, this would be more sophisticated and stored/retrieved properly
-        const history = localStorage.getItem('browsingHistory') || '';
-        const newHistory = `${history}, ${foundProduct.name}`.replace(/^,|,$/, '').trim();
-        localStorage.setItem('browsingHistory', newHistory);
-        setBrowsingHistoryForAI(newHistory);
+    async function loadProduct() {
+      setIsLoading(true);
+      if (params.id) {
+        const slug = Array.isArray(params.id) ? params.id[0] : params.id;
+        try {
+          const foundProduct = await getProductBySlug(slug); // Assuming this is now async
+          if (foundProduct) {
+            setProduct(foundProduct);
+            const history = localStorage.getItem('browsingHistory') || '';
+            const newHistory = `${history}, ${foundProduct.name}`.replace(/^,|,$/, '').trim().split(',').slice(-5).join(','); // Keep last 5
+            localStorage.setItem('browsingHistory', newHistory);
+            setBrowsingHistoryForAI(newHistory);
+          } else {
+            setProduct(null); // Explicitly set to null if not found
+          }
+        } catch (error) {
+          console.error("Failed to load product:", error);
+          setProduct(null);
+        }
       } else {
-        // Handle product not found, maybe redirect or show a 404 component
-        // For now, redirecting to products page
-        router.push('/products');
+        setProduct(null); // No ID, so no product
       }
+      setIsLoading(false);
     }
-  }, [params.id, router]);
+    loadProduct();
+  }, [params.id]);
 
-  if (!product) {
+  if (isLoading || product === undefined) { // Show loading if isLoading or product state is initial undefined
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
-        <p>Loading product details...</p>
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-lg">Loading product details...</p>
       </div>
     );
   }
+
+  if (product === null) { // Product explicitly not found or error occurred
+     return (
+      <div className="text-center py-20">
+        <AlertTriangle className="mx-auto h-24 w-24 text-destructive mb-6" />
+        <h1 className="text-4xl font-bold font-headline mb-4">404 - Product Not Found</h1>
+        <p className="text-muted-foreground mb-8">The product you are looking for does not exist or may have been removed.</p>
+        <Button onClick={() => router.push('/products')} variant="outline">
+          <ChevronLeft className="mr-2 h-4 w-4" /> Back to Products
+        </Button>
+      </div>
+    );
+  }
+
 
   const handleAddToCart = () => {
     addItem(product);
@@ -61,16 +86,15 @@ export default function ProductDetailPage() {
   return (
     <div className="space-y-12">
       <Button variant="outline" onClick={() => router.back()} className="mb-6">
-        <ChevronLeft className="mr-2 h-4 w-4" /> Back to Products
+        <ChevronLeft className="mr-2 h-4 w-4" /> Back
       </Button>
 
       <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-start">
-        {/* Product Image Gallery - simplified to one image */}
         <div className="relative aspect-square rounded-lg overflow-hidden shadow-lg group">
           <Image
-            src={product.imageUrl}
+            src={product.imageUrl || `https://placehold.co/600x600.png?text=No+Image`}
             alt={product.name}
-            data-ai-hint={product.dataAiHint || 'product large'}
+            data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ")}
             layout="fill"
             objectFit="cover"
             className="group-hover:scale-105 transition-transform duration-500"
@@ -78,7 +102,6 @@ export default function ProductDetailPage() {
            <Badge variant={product.status === 'new' ? "default" : "secondary"} className="absolute top-4 left-4 capitalize neon-glow-primary">{product.status}</Badge>
         </div>
 
-        {/* Product Details */}
         <div className="space-y-6">
           <h1 className="font-headline text-4xl font-bold text-glow-primary">{product.name}</h1>
           <p className="text-2xl font-semibold text-primary">${product.price.toFixed(2)}</p>
@@ -111,6 +134,11 @@ export default function ProductDetailPage() {
                 <span className="ml-2 text-foreground">{product.dimensions}</span>
               </div>
             )}
+            <div className="flex items-center">
+                <Layers className="h-5 w-5 mr-2 text-muted-foreground" /> {/* Using Layers as generic icon for stock */}
+                <span className="font-medium">Stock:</span>
+                <span className="ml-2 text-foreground">{product.stock > 0 ? `${product.stock} available` : 'Out of Stock'}</span>
+            </div>
           </div>
 
           {product.features && product.features.length > 0 && (
@@ -124,13 +152,13 @@ export default function ProductDetailPage() {
             </div>
           )}
           
-          <Button size="lg" onClick={handleAddToCart} className="w-full md:w-auto group">
-            <ShoppingCartIcon className="mr-2 h-5 w-5 group-hover:animate-pulse" /> Add to Cart
+          <Button size="lg" onClick={handleAddToCart} className="w-full md:w-auto group" disabled={product.stock === 0}>
+            <ShoppingCartIcon className="mr-2 h-5 w-5 group-hover:animate-pulse" /> 
+            {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
           </Button>
         </div>
       </div>
 
-      {/* AI Product Recommendations */}
       {browsingHistoryForAI && (
         <section className="mt-16">
           <h2 className="text-3xl font-headline font-semibold mb-8 text-center">You Might Also Like</h2>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -7,19 +8,17 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Loader2, Zap } from 'lucide-react';
-import { mockProducts, type Product } from '@/lib/products'; // Import mockProducts for fallback/display
+import { getProducts, type Product } from '@/lib/products'; // Import getProducts
 
 export default function ProductRecommendations({ initialBrowsingHistory = "viewed futuristic sofa, smart bed" }: { initialBrowsingHistory?: string }) {
-  const [recommendations, setRecommendations] = useState<ProductRecommendationOutput | null>(null);
+  const [aiRecommendedProductNames, setAiRecommendedProductNames] = useState<string[]>([]);
+  const [displayableRecommendations, setDisplayableRecommendations] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // State for "browsing history" - simple mock for demonstration
-  // In a real app, this would be derived from user activity
   const [browsingHistory, setBrowsingHistory] = useState(initialBrowsingHistory);
 
   useEffect(() => {
-    async function fetchRecommendations() {
+    async function fetchAndProcessRecommendations() {
       if (!browsingHistory) {
         setLoading(false);
         return;
@@ -27,33 +26,39 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
       try {
         setLoading(true);
         setError(null);
-        const result = await getProductRecommendations({ browsingHistory });
-        setRecommendations(result);
+        
+        // Step 1: Get names from AI
+        const aiResult = await getProductRecommendations({ browsingHistory });
+        const recommendedNames = aiResult.recommendedProducts
+          .split(',')
+          .map(name => name.trim().toLowerCase())
+          .filter(name => name.length > 0);
+        setAiRecommendedProductNames(recommendedNames);
+
+        // Step 2: Fetch actual products from our "database" (getProducts)
+        if (recommendedNames.length > 0) {
+          const allProducts = await getProducts({status: 'new'}); // Fetch 'new' (published) products
+          
+          const matchedProducts = allProducts.filter(product => 
+            recommendedNames.some(recName => product.name.toLowerCase().includes(recName))
+          ).slice(0, 3); // Limit to 3 recommendations
+          
+          setDisplayableRecommendations(matchedProducts);
+        } else {
+          setDisplayableRecommendations([]);
+        }
+
       } catch (err) {
-        console.error("Error fetching product recommendations:", err);
+        console.error("Error fetching/processing product recommendations:", err);
         setError("Failed to load recommendations. Please try again later.");
+        setDisplayableRecommendations([]);
       } finally {
         setLoading(false);
       }
     }
-    fetchRecommendations();
+    fetchAndProcessRecommendations();
   }, [browsingHistory]);
 
-  // Helper to parse recommendations and map to mock products
-  // This is a simplified approach. A real app would need more robust parsing and product matching.
-  const getRecommendedProducts = (): Product[] => {
-    if (!recommendations || !recommendations.recommendedProducts) return [];
-    
-    const recommendedNames = recommendations.recommendedProducts
-      .split(',')
-      .map(name => name.trim().toLowerCase());
-
-    return mockProducts.filter(product => 
-      recommendedNames.some(recName => product.name.toLowerCase().includes(recName))
-    ).slice(0, 3); // Limit to 3 recommendations for display
-  };
-
-  const displayableRecommendations = getRecommendedProducts();
 
   if (loading) {
     return (
@@ -68,7 +73,7 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
     return <p className="text-destructive text-center">{error}</p>;
   }
 
-  if (!recommendations || displayableRecommendations.length === 0) {
+  if (displayableRecommendations.length === 0) {
     return <p className="text-muted-foreground text-center">No specific recommendations for you at the moment. Explore our collection!</p>;
   }
 
@@ -79,9 +84,9 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
           <Card key={product.id} className="overflow-hidden hover:shadow-xl transition-shadow duration-300 group">
             <CardHeader className="p-0">
               <Image 
-                src={product.imageUrl} 
+                src={product.imageUrl || `https://placehold.co/600x400.png?text=No+Image`}
                 alt={product.name} 
-                data-ai-hint={product.dataAiHint || 'product image'}
+                data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ")}
                 width={600} 
                 height={400} 
                 className="object-cover w-full h-56 group-hover:scale-105 transition-transform duration-300" />

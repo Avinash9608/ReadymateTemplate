@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette, List, FilePlus, Files } from 'lucide-react'; 
+import { UserCog, History, LogOut, LayoutDashboard, SettingsIcon, Palette, List, FilePlus, Files, ShoppingBag, Archive } from 'lucide-react'; 
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileNavItems = [
@@ -20,6 +20,8 @@ const adminNavItems = [
   { name: 'Site Settings', href: '/admin/settings', icon: SettingsIcon },
   { name: 'Create New Page', href: '/admin/pages/create', icon: FilePlus },
   { name: 'Manage Pages', href: '/admin/pages/manage', icon: Files },
+  { name: 'Create Product', href: '/admin/products/create', icon: ShoppingBag },
+  { name: 'Manage Products', href: '/admin/products/manage', icon: Archive },
 ];
 
 
@@ -95,5 +97,3 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-    

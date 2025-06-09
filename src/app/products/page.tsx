@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, Suspense, type Dispatch, type SetStateAction } from 'react';
-import { mockProducts, type Product } from '@/lib/products';
+import { getProducts, getCategories, type Product } from '@/lib/products'; // Updated
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
@@ -11,11 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Zap, Filter, X } from 'lucide-react';
+import { Zap, Filter, X, Loader2 } from 'lucide-react'; // Added Loader2
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar';
 
-const categories = Array.from(new Set(mockProducts.map(p => p.category))) as string[];
 
 interface InitialCategoryHandlerProps {
   setSelectedCategory: Dispatch<SetStateAction<string>>;
@@ -35,23 +35,61 @@ function InitialCategoryHandler({ setSelectedCategory }: InitialCategoryHandlerP
 }
 
 export default function ProductsPage() {
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
-  const [productStatus, setProductStatus] = useState<'all' | 'new' | 'old'>('all');
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]); // Max price from products
+  const [productStatus, setProductStatus] = useState<'all' | 'new' | 'old' | 'draft' | 'archived'>('all');
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    async function loadInitialData() {
+      setIsLoading(true);
+      try {
+        const [fetchedProducts, fetchedCategories] = await Promise.all([
+          getProducts(), // Fetch all products initially
+          getCategories()
+        ]);
+        setAllProducts(fetchedProducts);
+        setAllCategories(fetchedCategories);
+        
+        // Set initial max price for slider based on fetched products
+        if (fetchedProducts.length > 0) {
+          const maxPrice = Math.max(...fetchedProducts.map(p => p.price), 5000);
+          setPriceRange([0, Math.ceil(maxPrice / 100) * 100]); // Round up to nearest 100
+        }
+
+      } catch (error) {
+        console.error("Failed to load products/categories:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadInitialData();
+  }, []);
+
+
   const filteredProducts = useMemo(() => {
-    return mockProducts.filter(product => {
+    if (isLoading) return []; // Don't filter if still loading base data
+    return allProducts.filter(product => {
       const matchesSearchTerm = 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         product.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const matchesStatus = productStatus === 'all' || product.status === productStatus;
+      
+      // Only show 'new' or 'old' (published) products by default unless 'draft' or 'archived' is explicitly selected.
+      const isPubliclyVisible = product.status === 'new' || product.status === 'old';
+      if (productStatus === 'all') {
+        return matchesSearchTerm && matchesCategory && matchesPrice && isPubliclyVisible;
+      }
       return matchesSearchTerm && matchesCategory && matchesPrice && matchesStatus;
     });
-  }, [searchTerm, selectedCategory, priceRange, productStatus]);
+  }, [searchTerm, selectedCategory, priceRange, productStatus, allProducts, isLoading]);
 
   const FilterControls = () => (
     <div className="space-y-6 p-4">
@@ -75,7 +113,7 @@ export default function ProductsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {categories.map(cat => (
+            {allCategories.map(cat => (
               <SelectItem key={cat} value={cat}>{cat}</SelectItem>
             ))}
           </SelectContent>
@@ -89,9 +127,8 @@ export default function ProductsPage() {
           <span>${priceRange[1]}</span>
         </div>
         <Slider
-          defaultValue={[0, 5000]}
           min={0}
-          max={5000}
+          max={Math.max(...allProducts.map(p => p.price), 5000)} // Dynamic max based on products
           step={50}
           value={priceRange}
           onValueChange={(value) => setPriceRange(value as [number, number])}
@@ -100,9 +137,9 @@ export default function ProductsPage() {
       </div>
 
       <div>
-        <Label className="text-sm font-medium">Status</Label>
+        <Label className="text-sm font-medium">Status (Admin View)</Label>
         <div className="mt-2 space-y-2">
-          {(['all', 'new', 'old'] as const).map(statusValue => (
+          {(['all', 'new', 'old', 'draft', 'archived'] as const).map(statusValue => (
             <div key={statusValue} className="flex items-center space-x-2">
               <Checkbox
                 id={`status-${statusValue}`}
@@ -110,11 +147,12 @@ export default function ProductsPage() {
                 onCheckedChange={() => setProductStatus(statusValue)}
               />
               <Label htmlFor={`status-${statusValue}`} className="capitalize font-normal">
-                {statusValue}
+                {statusValue === 'new' || statusValue === 'old' ? `${statusValue} (Published)` : statusValue}
               </Label>
             </div>
           ))}
         </div>
+         <p className="text-xs text-muted-foreground mt-1">Note: 'Draft' and 'Archived' are typically admin-only views.</p>
       </div>
       <Button onClick={() => setIsFilterSidebarOpen(false)} className="w-full md:hidden">
         Apply Filters
@@ -122,14 +160,20 @@ export default function ProductsPage() {
     </div>
   );
 
+  if (isLoading && allProducts.length === 0) { // Show loader only on initial full load
+     return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row gap-8">
-      {/* Initial category handler */}
-      <Suspense>
+      <Suspense fallback={<Loader2 className="h-6 w-6 animate-spin"/>}>
         <InitialCategoryHandler setSelectedCategory={setSelectedCategory} />
       </Suspense>
 
-      {/* Desktop Sidebar */}
       <aside className="hidden md:block w-full md:w-1/4 lg:w-1/5 sticky top-20 h-[calc(100vh-10rem)] overflow-y-auto pr-4 border-r">
         <h3 className="text-xl font-headline font-semibold mb-4 flex items-center">
           <Filter className="mr-2 h-5 w-5" /> Filters
@@ -137,7 +181,6 @@ export default function ProductsPage() {
         <FilterControls />
       </aside>
 
-      {/* Mobile Sidebar Trigger and Sheet */}
       <div className="md:hidden mb-4">
         <Button variant="outline" onClick={() => setIsFilterSidebarOpen(true)} className="w-full">
           <Filter className="mr-2 h-5 w-5" /> Show Filters
@@ -169,10 +212,11 @@ export default function ProductsPage() {
         </SidebarProvider>
       </div>
 
-      {/* Product Grid */}
       <main className="w-full md:w-3/4 lg:w-4/5">
         <h1 className="text-3xl font-headline font-bold mb-8">Our Collection</h1>
-        {filteredProducts.length > 0 ? (
+        {isLoading && allProducts.length > 0 ? ( // Show subtle loading for filter changes
+          <div className="text-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Filtering...</p></div>
+        ) : filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
               <Card 
@@ -181,9 +225,9 @@ export default function ProductsPage() {
               >
                 <CardHeader className="p-0">
                   <Image
-                    src={product.imageUrl}
+                    src={product.imageUrl || `https://placehold.co/600x400.png?text=No+Image`}
                     alt={product.name}
-                    data-ai-hint={product.dataAiHint || 'product image'}
+                    data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ")}
                     width={600}
                     height={400}
                     className="object-cover w-full h-56 group-hover:scale-105 transition-transform duration-300"
