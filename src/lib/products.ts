@@ -25,7 +25,7 @@ export type Product = {
   description: string;
   price: number;
   category: string;
-  status: 'new' | 'old' | 'draft' | 'archived';
+  status: 'new' | 'old' | 'draft' | 'archived' | 'ai-generated-temp'; // Added ai-generated-temp
   imageUrl?: string;
   imagePath?: string; // Path in Firebase Storage for deletion
   features?: string[];
@@ -39,28 +39,67 @@ export type Product = {
 
 // Helper function to upload data URI to Firebase Storage
 export const uploadDataUriToStorage = async (dataUri: string, path: string): Promise<{ downloadURL: string, storagePath: string }> => {
+  // IMPORTANT: For client-side uploads like this to work,
+  // your Firebase Storage bucket MUST have CORS configured
+  // to allow requests from your web app's origin.
+  // Example Origins: your Cloud Workstation URL, http://localhost:9002, your production domain.
+  // Methods: GET, POST, PUT, OPTIONS
+  // Headers: Content-Type, Authorization, X-Goog-Resumable (and others as needed)
   const storageRef = ref(storage, path);
-  const snapshot = await uploadString(storageRef, dataUri, 'data_url');
-  const downloadURL = await getDownloadURL(snapshot.ref);
-  return { downloadURL, storagePath: path };
+  console.log(`Attempting to upload data URI to Firebase Storage at path: ${path}. Ensure CORS is configured on gs://${storageRef.bucket}.`);
+  try {
+    const snapshot = await uploadString(storageRef, dataUri, 'data_url');
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log(`Successfully uploaded to ${path}. Download URL: ${downloadURL}`);
+    return { downloadURL, storagePath: path };
+  } catch (error: any) {
+    console.error(`Error uploading data URI to Firebase Storage (path: ${path}). Error type: ${error.name}, message: ${error.message}, code: ${error.code}`, error);
+    // For CORS errors, error.code might be 'storage/unauthorized' or 'storage/object-not-found' (if preflight failed badly)
+    // or just a generic network error.
+    let friendlyMessage = `Image upload to Firebase Storage failed. Path: ${path}.`;
+    if (error.code === 'storage/unauthorized' || (error.message && error.message.toLowerCase().includes('cors'))) {
+        friendlyMessage += ' This is often a CORS configuration issue on your Firebase Storage bucket. Please verify your bucket\'s CORS settings.';
+    } else {
+        friendlyMessage += ` Details: ${error.message || 'Unknown error'}`;
+    }
+    throw new Error(friendlyMessage); // Re-throw a more informative error
+  }
 };
 
 // Function to add a product to Firestore
 export const addProductToFirestore = async (
   productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string | null> => {
+  console.log("addProductToFirestore called with raw data:", productData);
   try {
     let finalImageUrl = productData.imageUrl;
     let finalImagePath = productData.imagePath;
+    let productStatus = productData.status;
 
     // If imageUrl is a data URI, upload it to Firebase Storage
     if (productData.imageUrl && productData.imageUrl.startsWith('data:image')) {
-      const imagePathInStorage = productData.imagePath || `products/images/${productData.slug}-${Date.now()}`;
+      console.log("Data URI detected for imageUrl. Attempting to upload to Firebase Storage.");
+      
+      const isAiGenerated = productData.status === 'ai-generated-temp';
+      const imageTypeFolder = isAiGenerated ? 'ai-generated' : 'manual';
+      const imageFileName = `${productData.slug}-${Date.now()}.png`; // Use .png for AI images by default
+      const imagePathInStorage = productData.imagePath || `products/images/${imageTypeFolder}/${imageFileName}`;
+      
+      console.log(`Generated imagePathInStorage for upload: ${imagePathInStorage}`);
+
       const { downloadURL, storagePath } = await uploadDataUriToStorage(productData.imageUrl, imagePathInStorage);
       finalImageUrl = downloadURL;
       finalImagePath = storagePath;
+      console.log(`Image uploaded. Final URL: ${finalImageUrl}, Path: ${finalImagePath}`);
+      // If it was an AI temp status, set it to draft after successful upload
+      if (isAiGenerated) {
+        productStatus = 'draft';
+      }
+    } else if (productData.imageUrl && productData.imageUrl.startsWith('https://placehold.co')) {
+        console.log("Placeholder image URL provided:", productData.imageUrl);
+        finalImagePath = productData.imagePath || `placeholders/${productData.status}/${productData.slug}.png`;
     } else if (!productData.imageUrl) {
-      // Default placeholder if no image is provided and not AI generated
+      console.log("No imageUrl provided. Using default placeholder.");
       finalImageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(productData.name.substring(0,15))}`;
       finalImagePath = `placeholders/default/${productData.slug}.png`;
     }
@@ -70,16 +109,18 @@ export const addProductToFirestore = async (
       ...productData,
       imageUrl: finalImageUrl,
       imagePath: finalImagePath,
+      status: productStatus, // Use the potentially updated status
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-
+    
+    console.log("Attempting to save product to Firestore:", productToSave);
     const docRef = await addDoc(collection(db, 'products'), productToSave);
     console.log('Product added to Firestore with ID: ', docRef.id);
     return docRef.id;
-  } catch (error) {
-    console.error('Error adding product to Firestore: ', error);
-    return null;
+  } catch (error: any) {
+    console.error('Error in addProductToFirestore (could be during upload or Firestore save): ', error.message, error);
+    throw error; // Re-throw the error to be handled by the calling page
   }
 };
 
@@ -169,8 +210,8 @@ export const deleteProductFromFirestore = async (productId: string, imagePath?: 
     await deleteDoc(doc(db, 'products', productId));
     console.log(`Product ${productId} deleted from Firestore.`);
 
-    // Delete image from Firebase Storage if imagePath is provided
-    if (imagePath && !imagePath.startsWith('placeholders/')) { // Don't delete placeholder paths
+    // Delete image from Firebase Storage if imagePath is provided and not a placeholder
+    if (imagePath && !imagePath.startsWith('placeholders/')) { 
       const imageRef = ref(storage, imagePath);
       await deleteObject(imageRef);
       console.log(`Image ${imagePath} deleted from Firebase Storage.`);
@@ -186,7 +227,8 @@ export const deleteProductFromFirestore = async (productId: string, imagePath?: 
 // Function to get unique categories from products in Firestore
 export const getCategoriesFromFirestore = async (): Promise<string[]> => {
     try {
-        const products = await getProductsFromFirestore({ status: 'all', includeDraftArchived: true }); // Fetch all to derive all categories
+        // Fetch only products that are 'new' or 'old' (publicly visible) to derive categories for frontend display
+        const products = await getProductsFromFirestore({ status: 'all', includeDraftArchived: false }); 
         const categories = new Set(products.map(p => p.category));
         return Array.from(categories);
     } catch (error) {
@@ -197,17 +239,18 @@ export const getCategoriesFromFirestore = async (): Promise<string[]> => {
 
 
 // --- Old Placeholder Functions (Kept for reference, can be removed if not needed) ---
+// These should be considered deprecated if the Firestore versions are fully implemented and used.
 export const getProductBySlug = async (slug: string): Promise<Product | undefined> => {
-  console.warn(`Legacy getProductBySlug: Fetching product by slug "${slug}" - should use getProductBySlugFromFirestore.`);
-  return undefined;
+  console.warn(`Legacy getProductBySlug: Fetching product by slug "${slug}" - should use getProductBySlugFromFirestore. This function will now call the Firestore version.`);
+  return getProductBySlugFromFirestore(slug);
 };
 
-export const getProducts = async (filters?: { category?: string; status?: string; limit?: number }): Promise<Product[]> => {
-  console.warn("Legacy getProducts: Fetching products - should use getProductsFromFirestore.", filters);
-  return [];
+export const getProducts = async (filters?: { category?: string; status?: 'new' | 'old' | 'draft' | 'archived' | 'all'; limit?: number, includeDraftArchived?: boolean }): Promise<Product[]> => {
+  console.warn("Legacy getProducts: Fetching products - should use getProductsFromFirestore. This function will now call the Firestore version.", filters);
+  return getProductsFromFirestore(filters);
 };
 
 export const getCategories = async (): Promise<string[]> => {
-  console.warn("Legacy getCategories: Fetching categories - should use getCategoriesFromFirestore.");
-  return ["Living Room", "Bedroom", "Office", "Dining", "Outdoor"];
+  console.warn("Legacy getCategories: Fetching categories - should use getCategoriesFromFirestore. This function will now call the Firestore version.");
+  return getCategoriesFromFirestore();
 };

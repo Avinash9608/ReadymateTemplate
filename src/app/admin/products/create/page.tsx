@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, PlusCircle, ShoppingBag, Sparkles } from 'lucide-react';
 import NextImage from 'next/image';
 import { generateProductImage } from '@/ai/flows/generate-product-image-flow';
-import { addProductToFirestore, type Product } from '@/lib/products'; // Updated import
+import { addProductToFirestore, type Product } from '@/lib/products'; 
 
 const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -27,7 +27,7 @@ const productSchema = z.object({
   status: z.enum(["new", "old", "draft", "archived"]).default("draft"),
   stock: z.coerce.number().min(0, "Stock cannot be negative").default(0),
   image: z.instanceof(FileList).optional(),
-  dataAiHint: z.string().max(100, "AI hint should be concise (max 100 chars)").optional(), // Increased max length
+  dataAiHint: z.string().max(200, "AI hint should be concise (max 200 chars)").optional(),
   features: z.string().optional().describe("Comma-separated list of product features"),
   dimensions: z.string().optional(),
   material: z.string().optional(),
@@ -35,7 +35,7 @@ const productSchema = z.object({
 
 type ProductFormValues = z.infer<typeof productSchema>;
 
-const mockCategories = ["Living Room", "Bedroom", "Office", "Dining", "Outdoor", "Lighting", "Accessories"];
+const mockCategories = ["Living Room", "Bedroom", "Office", "Dining", "Outdoor", "Lighting", "Accessories", "Smart Home", "Eco-Friendly"];
 
 export default function CreateProductPage() {
   const { toast } = useToast();
@@ -62,7 +62,7 @@ export default function CreateProductPage() {
       .replace(/[^a-z0-9-]/g, '');
     setValue("slug", slug);
     if (!watch("dataAiHint")) {
-      setValue("dataAiHint", name.split(" ").slice(0, 3).join(" ").toLowerCase());
+      setValue("dataAiHint", name.split(" ").slice(0, 4).join(" ").toLowerCase());
     }
   };
 
@@ -72,7 +72,7 @@ export default function CreateProductPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setManualImagePreview(reader.result as string);
-        setAiGeneratedImagePreview(null);
+        setAiGeneratedImagePreview(null); // Clear AI preview if manual image is chosen
       };
       reader.readAsDataURL(file);
     } else {
@@ -88,30 +88,29 @@ export default function CreateProductPage() {
       return;
     }
     setIsGeneratingImage(true);
-    setAiGeneratedImagePreview(null);
+    setAiGeneratedImagePreview(null); 
     try {
       const result = await generateProductImage({ productName, dataAiHint: hint });
       if (result.imageDataUri && result.imageDataUri.startsWith('data:image')) {
         setAiGeneratedImagePreview(result.imageDataUri);
+        setManualImagePreview(null); // Clear manual preview if AI image is generated
+        setValue("image", undefined); // Clear file input
+        toast({ title: "AI Image Generated!", description: "Review the generated image below. Save product to store it." });
+      } else if (result.imageDataUri && result.imageDataUri.startsWith('https://placehold.co')) {
+        setAiGeneratedImagePreview(result.imageDataUri);
         setManualImagePreview(null);
         setValue("image", undefined);
-        toast({ title: "AI Image Generated!", description: "Review the generated image below." });
-      } else if (result.imageDataUri.startsWith('https://placehold.co')) {
-        setAiGeneratedImagePreview(result.imageDataUri); // Show placeholder if AI failed but flow returned one
-        setManualImagePreview(null);
-        setValue("image", undefined);
-        toast({ title: "AI Image Placeholder", description: "AI generation failed, showing a placeholder. You can try again or upload manually.", variant: "default", duration: 8000 });
-      }
-      else {
+        toast({ title: "AI Image Placeholder", description: "AI generation returned a placeholder. You can try again or upload manually.", variant: "default", duration: 8000 });
+      } else {
         throw new Error(result.imageDataUri || "Invalid image data received from AI.");
       }
     } catch (error: any) {
       console.error("Error generating AI image on client:", error);
       toast({
         title: "AI Image Generation Failed",
-        description: `Could not generate image. ${error.message || "Please check server logs, try again, or upload manually."}`,
+        description: `Could not generate image. ${error.message || "Please check server logs, content policies, API key, or try again. Upload manually if issue persists."}`,
         variant: "destructive",
-        duration: 10000,
+        duration: 15000,
        });
       setAiGeneratedImagePreview(`https://placehold.co/300x200.png?text=AI+Gen+Client+Error`);
     } finally {
@@ -122,26 +121,29 @@ export default function CreateProductPage() {
   const onSubmit: SubmitHandler<ProductFormValues> = async (data) => {
     setIsSubmitting(true);
 
-    let imageUrl: string | undefined = undefined;
-    let imagePath: string | undefined = undefined;
-    const manualFile = data.image?.[0];
+    let imageUrlForDb: string | undefined = undefined;
+    let imagePathForDb: string | undefined = undefined;
+    let productStatusForDb: Product['status'] = data.status;
 
-    if (manualFile && manualImagePreview) {
-      // For manual uploads, the preview (data URI) will be sent for storage upload
-      imageUrl = manualImagePreview;
-      imagePath = `products/images/manual/${Date.now()}-${manualFile.name.replace(/\s+/g, '_')}`;
-      console.log("Using manual image preview data URI for upload:", manualFile.name);
+    if (manualImagePreview) {
+      // Manual image preview (data URI) will be sent for upload by addProductToFirestore
+      imageUrlForDb = manualImagePreview;
+      // Path will be generated by addProductToFirestore or its helper
+      imagePathForDb = `products/images/manual/${data.slug}-${Date.now()}.${data.image?.[0]?.name.split('.').pop() || 'jpg'}`;
+      console.log("Using manual image preview data URI for upload:", data.image?.[0]?.name);
     } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('data:image')) {
-      imageUrl = aiGeneratedImagePreview;
-      imagePath = `products/images/ai-generated/${data.slug}-${Date.now()}.png`;
+      imageUrlForDb = aiGeneratedImagePreview;
+      // Path will be generated by addProductToFirestore or its helper, using a temporary status
+      imagePathForDb = `products/images/ai-generated/${data.slug}-${Date.now()}.png`;
+      productStatusForDb = 'ai-generated-temp'; // Temporary status to indicate AI image needs upload
       console.log("Using AI-generated image data URI for upload.");
     } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('https://placehold.co')) {
-      imageUrl = aiGeneratedImagePreview; // Using placeholder from AI failure
-      imagePath = `placeholders/ai-failed/${data.slug}.png`;
+      imageUrlForDb = aiGeneratedImagePreview; 
+      imagePathForDb = `placeholders/ai-failed/${data.slug}.png`;
       console.log("Using placeholder image from AI generation attempt.");
     } else {
-      imageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0, 15))}`;
-      imagePath = `placeholders/default/${data.slug}.png`;
+      imageUrlForDb = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0, 15))}`;
+      imagePathForDb = `placeholders/default/${data.slug}.png`;
       console.log("Using default placeholder image.");
     }
 
@@ -151,32 +153,44 @@ export default function CreateProductPage() {
       description: data.description,
       price: data.price,
       category: data.category,
-      status: data.status,
+      status: productStatusForDb,
       stock: data.stock,
-      imageUrl: imageUrl, // This will be data URI or placeholder URL
-      imagePath: imagePath,
+      imageUrl: imageUrlForDb, 
+      imagePath: imagePathForDb,
       dataAiHint: data.dataAiHint || data.name.split(" ").slice(0, 2).join(" ").toLowerCase(),
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       dimensions: data.dimensions,
       material: data.material,
     };
 
-    console.log("Attempting to save product to Firestore:", productToSave);
-    const newProductId = await addProductToFirestore(productToSave);
-    setIsSubmitting(false);
-
-    if (newProductId) {
-      toast({
-        title: "Product Created!",
-        description: `The product "${productToSave.name}" has been saved to the database.`,
-      });
-      router.push('/admin/products/manage');
-    } else {
-      toast({
-        title: "Error Creating Product",
-        description: "There was an issue saving the product. Please check server logs or Firebase console.",
-        variant: "destructive",
-      });
+    console.log("Attempting to save product, payload for addProductToFirestore:", productToSave);
+    
+    try {
+        const newProductId = await addProductToFirestore(productToSave);
+        if (newProductId) {
+        toast({
+            title: "Product Created!",
+            description: `The product "${productToSave.name}" has been saved to the database.`,
+        });
+        router.push('/admin/products/manage');
+        } else {
+        // This case might not be hit if addProductToFirestore throws an error on failure
+        toast({
+            title: "Error Creating Product",
+            description: "There was an issue saving the product (no ID returned). Please check server logs or Firebase console.",
+            variant: "destructive",
+        });
+        }
+    } catch (error: any) {
+        console.error("Error during product submission process:", error);
+        toast({
+            title: "Error Creating Product",
+            description: error.message || "An unexpected error occurred. Please check console and server logs.",
+            variant: "destructive",
+            duration: 10000,
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -279,7 +293,7 @@ export default function CreateProductPage() {
               <div className="space-y-2">
                   <Label htmlFor="image">Upload Image Manually</Label>
                   <Input id="image" type="file" {...register("image")} accept="image/*" onChange={handleImageFileChange} />
-                  <p className="text-xs text-muted-foreground">Overrides AI-generated image if a file is selected.</p>
+                  <p className="text-xs text-muted-foreground">Overrides AI-generated image if a file is selected. Ensure CORS is configured on Firebase Storage for this to work.</p>
                   {errors.image && <p className="text-sm text-destructive">{errors.image.message}</p>}
               </div>
               <div className="flex items-center my-2">
@@ -295,7 +309,7 @@ export default function CreateProductPage() {
                   {isGeneratingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {isGeneratingImage ? "Generating..." : "Generate Image with AI"}
                 </Button>
-                <p className="text-xs text-muted-foreground">Uses product name and this hint. Overridden by manual upload.</p>
+                <p className="text-xs text-muted-foreground">Uses product name and this hint. Overridden by manual upload. Ensure CORS configured for Genkit image generation model.</p>
               </div>
             </Card>
           </CardContent>
