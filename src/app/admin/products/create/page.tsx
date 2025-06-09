@@ -13,10 +13,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Loader2, PlusCircle, ShoppingBag, Sparkles, Image as ImageIcon } from 'lucide-react';
-import NextImage from 'next/image'; // Renamed to avoid conflict with Lucide icon
+import { Loader2, PlusCircle, ShoppingBag, Sparkles } from 'lucide-react';
+import NextImage from 'next/image';
 import { generateProductImage } from '@/ai/flows/generate-product-image-flow';
-
+import { addProductToFirestore, type Product } from '@/lib/products'; // Updated import
 
 const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -27,12 +27,15 @@ const productSchema = z.object({
   status: z.enum(["new", "old", "draft", "archived"]).default("draft"),
   stock: z.coerce.number().min(0, "Stock cannot be negative").default(0),
   image: z.instanceof(FileList).optional(),
-  dataAiHint: z.string().max(50, "AI hint should be concise (max 50 chars)").optional(),
+  dataAiHint: z.string().max(100, "AI hint should be concise (max 100 chars)").optional(), // Increased max length
+  features: z.string().optional().describe("Comma-separated list of product features"),
+  dimensions: z.string().optional(),
+  material: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
 
-const mockCategories = ["Living Room", "Bedroom", "Office", "Dining", "Outdoor"];
+const mockCategories = ["Living Room", "Bedroom", "Office", "Dining", "Outdoor", "Lighting", "Accessories"];
 
 export default function CreateProductPage() {
   const { toast } = useToast();
@@ -42,8 +45,7 @@ export default function CreateProductPage() {
   const [aiGeneratedImagePreview, setAiGeneratedImagePreview] = useState<string | null>(null);
   const [manualImagePreview, setManualImagePreview] = useState<string | null>(null);
 
-
-  const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<ProductFormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       status: "draft",
@@ -56,11 +58,11 @@ export default function CreateProductPage() {
     setValue("name", name);
     const slug = name
       .toLowerCase()
-      .replace(/\s+/g, '-') 
-      .replace(/[^a-z0-9-]/g, ''); 
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
     setValue("slug", slug);
     if (!watch("dataAiHint")) {
-      setValue("dataAiHint", name.split(" ").slice(0, 2).join(" ").toLowerCase());
+      setValue("dataAiHint", name.split(" ").slice(0, 3).join(" ").toLowerCase());
     }
   };
 
@@ -70,7 +72,7 @@ export default function CreateProductPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setManualImagePreview(reader.result as string);
-        setAiGeneratedImagePreview(null); // Clear AI preview if manual file is selected
+        setAiGeneratedImagePreview(null);
       };
       reader.readAsDataURL(file);
     } else {
@@ -91,16 +93,27 @@ export default function CreateProductPage() {
       const result = await generateProductImage({ productName, dataAiHint: hint });
       if (result.imageDataUri && result.imageDataUri.startsWith('data:image')) {
         setAiGeneratedImagePreview(result.imageDataUri);
-        setManualImagePreview(null); // Clear manual preview if AI image is generated
-         setValue("image", undefined); // Clear file input if AI image is used
+        setManualImagePreview(null);
+        setValue("image", undefined);
         toast({ title: "AI Image Generated!", description: "Review the generated image below." });
-      } else {
-        throw new Error("Invalid image data received from AI.");
+      } else if (result.imageDataUri.startsWith('https://placehold.co')) {
+        setAiGeneratedImagePreview(result.imageDataUri); // Show placeholder if AI failed but flow returned one
+        setManualImagePreview(null);
+        setValue("image", undefined);
+        toast({ title: "AI Image Placeholder", description: "AI generation failed, showing a placeholder. You can try again or upload manually.", variant: "default", duration: 8000 });
       }
-    } catch (error) {
-      console.error("Error generating AI image:", error);
-      toast({ title: "AI Image Generation Failed", description: "Could not generate image. Please try again or upload manually.", variant: "destructive" });
-      setAiGeneratedImagePreview(`https://placehold.co/300x200.png?text=AI+Error`);
+      else {
+        throw new Error(result.imageDataUri || "Invalid image data received from AI.");
+      }
+    } catch (error: any) {
+      console.error("Error generating AI image on client:", error);
+      toast({
+        title: "AI Image Generation Failed",
+        description: `Could not generate image. ${error.message || "Please check server logs, try again, or upload manually."}`,
+        variant: "destructive",
+        duration: 10000,
+       });
+      setAiGeneratedImagePreview(`https://placehold.co/300x200.png?text=AI+Gen+Client+Error`);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -108,49 +121,65 @@ export default function CreateProductPage() {
 
   const onSubmit: SubmitHandler<ProductFormValues> = async (data) => {
     setIsSubmitting(true);
-    
-    let productPayload: any = { ...data };
-    
+
+    let imageUrl: string | undefined = undefined;
+    let imagePath: string | undefined = undefined;
     const manualFile = data.image?.[0];
 
-    if (manualFile) {
-      // ** SIMULATE MANUAL UPLOAD **
-      const simulatedFileName = `${Date.now()}-${manualFile.name.replace(/\s+/g, '_')}`;
-      productPayload.imageUrl = manualImagePreview; // Use the preview URL (data URI) for simulation
-      productPayload.imagePath = `products/images/manual/${simulatedFileName}`;
-      console.log("Simulated manual image upload:", manualFile.name);
+    if (manualFile && manualImagePreview) {
+      // For manual uploads, the preview (data URI) will be sent for storage upload
+      imageUrl = manualImagePreview;
+      imagePath = `products/images/manual/${Date.now()}-${manualFile.name.replace(/\s+/g, '_')}`;
+      console.log("Using manual image preview data URI for upload:", manualFile.name);
     } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('data:image')) {
-      // Use AI-generated image if no manual file
-      productPayload.imageUrl = aiGeneratedImagePreview;
-      productPayload.imagePath = `products/images/ai-generated/${data.slug}-${Date.now()}.png`; // Example path
-      console.log("Using AI-generated image.");
-      // IMPORTANT: In a real app, if imageDataUri is a data URI, you'd typically upload this
-      // data URI to Firebase Storage first, then store the Firebase Storage URL in productPayload.imageUrl.
-      // For now, we're "storing" the data URI directly for simplicity of this step.
+      imageUrl = aiGeneratedImagePreview;
+      imagePath = `products/images/ai-generated/${data.slug}-${Date.now()}.png`;
+      console.log("Using AI-generated image data URI for upload.");
+    } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('https://placehold.co')) {
+      imageUrl = aiGeneratedImagePreview; // Using placeholder from AI failure
+      imagePath = `placeholders/ai-failed/${data.slug}.png`;
+      console.log("Using placeholder image from AI generation attempt.");
     } else {
-        // Default placeholder if no image uploaded or generated
-        productPayload.imageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0,15))}`;
-        productPayload.imagePath = `placeholders/${data.slug}.png`;
-        productPayload.dataAiHint = data.dataAiHint || data.name.split(" ").slice(0,2).join(" ").toLowerCase();
-        console.log("Using default placeholder image.");
+      imageUrl = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0, 15))}`;
+      imagePath = `placeholders/default/${data.slug}.png`;
+      console.log("Using default placeholder image.");
     }
-    delete productPayload.image; // Remove FileList from final payload
 
+    const productToSave: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      price: data.price,
+      category: data.category,
+      status: data.status,
+      stock: data.stock,
+      imageUrl: imageUrl, // This will be data URI or placeholder URL
+      imagePath: imagePath,
+      dataAiHint: data.dataAiHint || data.name.split(" ").slice(0, 2).join(" ").toLowerCase(),
+      features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+      dimensions: data.dimensions,
+      material: data.material,
+    };
 
-    console.log("Submitting product data (mock):", productPayload);
-    // ** ACTUAL DATABASE SAVE LOGIC TO BE IMPLEMENTED HERE **
-    // Example: const newProduct = await saveProductToFirestore(productPayload);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    toast({
-      title: "Product Created (Mock)!",
-      description: `The product "${data.name}" has been notionally created. Image handling is simulated.`,
-    });
-    
-    router.push('/admin/products/manage');
+    console.log("Attempting to save product to Firestore:", productToSave);
+    const newProductId = await addProductToFirestore(productToSave);
     setIsSubmitting(false);
+
+    if (newProductId) {
+      toast({
+        title: "Product Created!",
+        description: `The product "${productToSave.name}" has been saved to the database.`,
+      });
+      router.push('/admin/products/manage');
+    } else {
+      toast({
+        title: "Error Creating Product",
+        description: "There was an issue saving the product. Please check server logs or Firebase console.",
+        variant: "destructive",
+      });
+    }
   };
-  
+
   const currentImagePreview = manualImagePreview || aiGeneratedImagePreview;
 
   return (
@@ -167,7 +196,6 @@ export default function CreateProductPage() {
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
-            {/* Product Name and Slug */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="name">Product Name</Label>
@@ -180,8 +208,7 @@ export default function CreateProductPage() {
                 {errors.slug && <p className="text-sm text-destructive">{errors.slug.message}</p>}
               </div>
             </div>
-            
-            {/* Description, Price, Category */}
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" {...register("description")} placeholder="Describe your product..." rows={3} />
@@ -205,7 +232,6 @@ export default function CreateProductPage() {
               </div>
             </div>
 
-            {/* Stock and Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="space-y-2">
                 <Label htmlFor="stock">Stock Quantity</Label>
@@ -226,36 +252,44 @@ export default function CreateProductPage() {
                 {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
               </div>
             </div>
-            
-            {/* Image Section */}
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <Label htmlFor="material">Material (Optional)</Label>
+                    <Input id="material" {...register("material")} placeholder="e.g., Oak Wood, Velvet" />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="dimensions">Dimensions (Optional)</Label>
+                    <Input id="dimensions" {...register("dimensions")} placeholder="e.g., 120x60x75 cm" />
+                </div>
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="features">Features (Optional, comma-separated)</Label>
+                <Textarea id="features" {...register("features")} placeholder="e.g., USB Charging, Smart Controls, Eco-friendly" rows={2}/>
+            </div>
+
+
             <Card className="p-4 space-y-4 bg-secondary/30">
               <Label className="text-base font-semibold">Product Image</Label>
-              
-              {/* Image Preview */}
               {currentImagePreview && (
                 <div className="my-4 border rounded-md overflow-hidden w-full aspect-video max-w-sm mx-auto bg-muted">
                   <NextImage src={currentImagePreview} alt="Product Preview" width={400} height={300} className="object-contain w-full h-full" />
                 </div>
               )}
-
-              {/* Manual Image Upload */}
               <div className="space-y-2">
                   <Label htmlFor="image">Upload Image Manually</Label>
                   <Input id="image" type="file" {...register("image")} accept="image/*" onChange={handleImageFileChange} />
                   <p className="text-xs text-muted-foreground">Overrides AI-generated image if a file is selected.</p>
                   {errors.image && <p className="text-sm text-destructive">{errors.image.message}</p>}
               </div>
-
               <div className="flex items-center my-2">
                 <hr className="flex-grow border-t" />
                 <span className="mx-2 text-xs text-muted-foreground">OR</span>
                 <hr className="flex-grow border-t" />
               </div>
-
-              {/* AI Image Generation */}
               <div className="space-y-2">
                 <Label htmlFor="dataAiHint">AI Image Generation Hint (Optional)</Label>
-                <Input id="dataAiHint" {...register("dataAiHint")} placeholder="e.g., futuristic chair, minimalist design" />
+                <Textarea id="dataAiHint" {...register("dataAiHint")} placeholder="e.g., futuristic chair, minimalist design, on a white background" rows={2} />
                 {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
                  <Button type="button" variant="outline" size="sm" onClick={handleGenerateAiImage} disabled={isGeneratingImage || !watch("name")}>
                   {isGeneratingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -264,7 +298,6 @@ export default function CreateProductPage() {
                 <p className="text-xs text-muted-foreground">Uses product name and this hint. Overridden by manual upload.</p>
               </div>
             </Card>
-
           </CardContent>
           <CardFooter className="flex justify-end">
             <Button type="submit" disabled={isSubmitting || isGeneratingImage}>
