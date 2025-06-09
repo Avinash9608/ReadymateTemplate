@@ -30,17 +30,17 @@ export default function ManageProductsPage() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
 
-  // Function to fetch products
   const loadProducts = async () => {
     setIsLoading(true);
     try {
-      // Fetch all statuses for admin view
       const fetchedProducts = await getProductsFromFirestore({ status: 'all', includeDraftArchived: true });
-      setProducts(fetchedProducts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
-    } catch (error) {
+      setProducts(fetchedProducts.sort((a, b) => 
+        new Date(b.createdAt?.toString() || 0).getTime() - new Date(a.createdAt?.toString() || 0).getTime()
+      ));
+    } catch (error: any) {
       console.error("Failed to fetch products:", error);
-      toast({ title: "Error", description: "Could not load products from database.", variant: "destructive" });
-      setProducts([]); // Set to empty array on error
+      toast({ title: "Error Loading Products", description: error.message || "Could not load products from database.", variant: "destructive" });
+      setProducts([]);
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +49,7 @@ export default function ManageProductsPage() {
   useEffect(() => {
     loadProducts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array: runs once on mount
+  }, []); 
 
   const handleDeleteConfirmation = (product: Product) => {
     setProductToDelete(product);
@@ -58,17 +58,25 @@ export default function ManageProductsPage() {
 
   const executeDeleteProduct = async () => {
     if (productToDelete) {
-      const success = await deleteProductFromFirestore(productToDelete.id, productToDelete.imagePath);
-      if (success) {
+      try {
+        const success = await deleteProductFromFirestore(productToDelete.id, productToDelete.imagePath);
+        if (success) {
+          toast({
+            title: "Product Deleted",
+            description: `The product "${productToDelete.name}" has been deleted.`,
+          });
+          setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+        } else {
+           toast({
+            title: "Error Deleting Product",
+            description: `Could not delete "${productToDelete.name}".`, // Error already logged in lib
+            variant: "destructive",
+          });
+        }
+      } catch (error: any) {
         toast({
-          title: "Product Deleted",
-          description: `The product "${productToDelete.name}" has been deleted from the database.`,
-        });
-        setProducts(prev => prev.filter(p => p.id !== productToDelete.id)); // Update UI optimistically
-      } else {
-         toast({
           title: "Error Deleting Product",
-          description: `Could not delete "${productToDelete.name}". Check server logs or Firebase console.`,
+          description: error.message || `An unexpected error occurred while deleting "${productToDelete.name}".`,
           variant: "destructive",
         });
       }
@@ -78,16 +86,13 @@ export default function ManageProductsPage() {
   };
 
   const togglePublishStatus = async (product: Product) => {
-    // Placeholder for actual status update logic in Firestore
-    // For a full implementation, you'd create an `updateProductStatusInFirestore` function
-    console.log("Toggling status (mock) for:", product.id, "to", product.status === 'draft' ? 'new' : 'draft');
-    // Example: await updateProductStatusInFirestore(product.id, newStatus);
-    // For UI update for this demo:
+    // This is a mock. For real implementation, an updateProduct function in lib/products.ts is needed
     const newStatus = product.status === 'draft' || product.status === 'archived' ? 'new' : 'draft';
+    // await updateProductStatusInFirestore(product.id, newStatus); // Example future function
     setProducts(prev => prev.map(p => p.id === product.id ? {...p, status: newStatus} : p));
     toast({
       title: "Product Status Updated (Mock)",
-      description: `"${product.name}" status notionally updated. Firestore update needed for persistence.`,
+      description: `"${product.name}" status changed to ${newStatus}. This is a UI mock; backend update needed.`,
     });
   };
 
@@ -152,7 +157,7 @@ export default function ManageProductsPage() {
                                      product.status === 'draft' ? 'secondary' : 'outline'}
                             className="capitalize"
                         >
-                          {product.status}
+                          {product.status === 'ai-generated-temp' ? 'Processing AI Image' : product.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
@@ -165,7 +170,7 @@ export default function ManageProductsPage() {
                           {product.status === 'draft' || product.status === 'archived' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         </Button>
                         <Link href={`/admin/products/edit/${product.id}`} passHref>
-                          <Button variant="outline" size="icon" title="Edit Product" disabled>
+                          <Button variant="outline" size="icon" title="Edit Product (Not Implemented)" disabled>
                             <Edit className="h-4 w-4" />
                           </Button>
                         </Link>

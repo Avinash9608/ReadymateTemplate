@@ -1,5 +1,5 @@
 
-"use client"; // Required for useEffect, useState
+"use client"; 
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import ProductRecommendations from '@/components/ai/ProductRecommendations';
-import { ArrowRight, Zap, Loader2 } from 'lucide-react';
-import { getProducts, getCategories, type Product } from '@/lib/products'; // Updated import
+import { ArrowRight, Zap, Loader2, AlertTriangle } from 'lucide-react';
+import { getProductsFromFirestore, getCategoriesFromFirestore, type Product } from '@/lib/products'; 
 
 interface CategoryType {
   name: string;
@@ -21,30 +21,30 @@ export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<CategoryType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
+      setError(null);
       try {
         const [fetchedProducts, fetchedCategoryNames] = await Promise.all([
-          getProducts({ limit: 3, status: 'new' }), // Example: fetch 3 "new" products
-          getCategories()
+          getProductsFromFirestore({ limit: 3, status: 'new' }),
+          getCategoriesFromFirestore()
         ]);
         setFeaturedProducts(fetchedProducts);
         
-        // Create placeholder category objects
         const categoryObjects: CategoryType[] = fetchedCategoryNames.map(name => ({
           name,
           slug: name.toLowerCase().replace(/\s+/g, '-'),
-          // Using placehold.co for category images as they are not in Product type
           imageUrl: `https://placehold.co/600x400.png?text=${encodeURIComponent(name)}`,
           dataAiHint: name.toLowerCase()
         }));
         setCategories(categoryObjects);
 
-      } catch (error) {
-        console.error("Failed to load homepage data:", error);
-        // Set empty or default data in case of error
+      } catch (err: any) {
+        console.error("Failed to load homepage data:", err);
+        setError(err.message || "Failed to load data. Please try again later.");
         setFeaturedProducts([]);
         setCategories([]);
       } finally {
@@ -62,13 +62,21 @@ export default function HomePage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-20 text-destructive">
+        <AlertTriangle className="mx-auto h-16 w-16 mb-4" />
+        <p className="text-xl font-semibold">Error Loading Page</p>
+        <p>{error}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">Try Again</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-16">
-      {/* Hero Section */}
       <section className="relative py-12 md:py-20 overflow-hidden">
-        {/* ... existing hero section content ... unchanged */}
         <div className="absolute inset-0 opacity-10 dark:opacity-5">
-          {/* Abstract background pattern or image if available */}
         </div>
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-2 gap-8 items-center">
@@ -93,13 +101,13 @@ export default function HomePage() {
                 layout="fill"
                 objectFit="cover"
                 className="rounded-lg shadow-2xl transform md:rotate-3 transition-transform duration-500 hover:rotate-0"
+                priority
               />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Featured Products Section */}
       <section>
         <h2 className="text-3xl font-headline font-semibold mb-8 text-center">Featured Products</h2>
         {featuredProducts.length > 0 ? (
@@ -135,7 +143,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Categories Section */}
       <section>
         <h2 className="text-3xl font-headline font-semibold mb-8 text-center">Shop by Category</h2>
         {categories.length > 0 ? (
@@ -163,7 +170,6 @@ export default function HomePage() {
         )}
       </section>
       
-      {/* AI Product Recommendations Section */}
       <section>
         <h2 className="text-3xl font-headline font-semibold mb-8 text-center">Just For You</h2>
         <ProductRecommendations />

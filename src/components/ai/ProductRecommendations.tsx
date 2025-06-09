@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, Zap } from 'lucide-react';
-import { getProducts, type Product } from '@/lib/products'; // Import getProducts
+import { Loader2, Zap, AlertTriangle } from 'lucide-react';
+import { getProductsFromFirestore, type Product } from '@/lib/products'; 
 
 export default function ProductRecommendations({ initialBrowsingHistory = "viewed futuristic sofa, smart bed" }: { initialBrowsingHistory?: string }) {
   const [aiRecommendedProductNames, setAiRecommendedProductNames] = useState<string[]>([]);
@@ -21,13 +21,13 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
     async function fetchAndProcessRecommendations() {
       if (!browsingHistory) {
         setLoading(false);
+        setError("No browsing history provided for recommendations.");
         return;
       }
       try {
         setLoading(true);
         setError(null);
         
-        // Step 1: Get names from AI
         const aiResult = await getProductRecommendations({ browsingHistory });
         const recommendedNames = aiResult.recommendedProducts
           .split(',')
@@ -35,22 +35,22 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
           .filter(name => name.length > 0);
         setAiRecommendedProductNames(recommendedNames);
 
-        // Step 2: Fetch actual products from our "database" (getProducts)
         if (recommendedNames.length > 0) {
-          const allProducts = await getProducts({status: 'new'}); // Fetch 'new' (published) products
+          // Fetch only 'new' (published and visible) products from Firestore
+          const allProducts = await getProductsFromFirestore({status: 'new'}); 
           
           const matchedProducts = allProducts.filter(product => 
             recommendedNames.some(recName => product.name.toLowerCase().includes(recName))
-          ).slice(0, 3); // Limit to 3 recommendations
+          ).slice(0, 3); 
           
           setDisplayableRecommendations(matchedProducts);
         } else {
           setDisplayableRecommendations([]);
         }
 
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching/processing product recommendations:", err);
-        setError("Failed to load recommendations. Please try again later.");
+        setError(err.message || "Failed to load recommendations. Please try again later.");
         setDisplayableRecommendations([]);
       } finally {
         setLoading(false);
@@ -70,11 +70,16 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
   }
 
   if (error) {
-    return <p className="text-destructive text-center">{error}</p>;
+    return (
+      <div className="text-destructive text-center py-8">
+        <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
+        <p>{error}</p>
+      </div>
+    );
   }
 
   if (displayableRecommendations.length === 0) {
-    return <p className="text-muted-foreground text-center">No specific recommendations for you at the moment. Explore our collection!</p>;
+    return <p className="text-muted-foreground text-center py-8">No specific recommendations for you at the moment. Explore our collection!</p>;
   }
 
   return (

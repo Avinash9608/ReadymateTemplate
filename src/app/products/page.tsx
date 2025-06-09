@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, Suspense, type Dispatch, type SetStateAction } from 'react';
-import { getProducts, getCategories, type Product } from '@/lib/products'; // Updated
+import { getProductsFromFirestore, getCategoriesFromFirestore, type Product } from '@/lib/products';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Zap, Filter, X, Loader2 } from 'lucide-react'; // Added Loader2
+import { Zap, Filter, X, Loader2, AlertTriangle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface InitialCategoryHandlerProps {
@@ -35,45 +36,52 @@ function InitialCategoryHandler({ setSelectedCategory }: InitialCategoryHandlerP
 }
 
 export default function ProductsPage() {
+  const { toast } = useToast();
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]); // Max price from products
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]); 
   const [productStatus, setProductStatus] = useState<'all' | 'new' | 'old' | 'draft' | 'archived'>('all');
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
 
   useEffect(() => {
     async function loadInitialData() {
       setIsLoading(true);
+      setError(null);
       try {
         const [fetchedProducts, fetchedCategories] = await Promise.all([
-          getProducts(), // Fetch all products initially
-          getCategories()
+          getProductsFromFirestore({status: 'all', includeDraftArchived: true}), // Fetch all for admin-like filtering
+          getCategoriesFromFirestore()
         ]);
         setAllProducts(fetchedProducts);
         setAllCategories(fetchedCategories);
         
-        // Set initial max price for slider based on fetched products
         if (fetchedProducts.length > 0) {
-          const maxPrice = Math.max(...fetchedProducts.map(p => p.price), 5000);
-          setPriceRange([0, Math.ceil(maxPrice / 100) * 100]); // Round up to nearest 100
+          const maxPrice = Math.max(...fetchedProducts.map(p => p.price), 0); // Ensure maxPrice is at least 0
+          setPriceRange([0, Math.ceil(Math.max(maxPrice, 50) / 50) * 50]); // Ensure slider max is reasonable
+        } else {
+          setPriceRange([0, 5000]); // Default if no products
         }
 
-      } catch (error) {
-        console.error("Failed to load products/categories:", error);
+      } catch (err: any) {
+        console.error("Failed to load products/categories:", err);
+        setError(err.message || "Failed to load product data. Please try again.");
+        toast({title: "Loading Error", description: err.message || "Could not fetch products.", variant: "destructive"});
       } finally {
         setIsLoading(false);
       }
     }
     loadInitialData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
   const filteredProducts = useMemo(() => {
-    if (isLoading) return []; // Don't filter if still loading base data
+    if (isLoading) return []; 
     return allProducts.filter(product => {
       const matchesSearchTerm = 
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -82,7 +90,6 @@ export default function ProductsPage() {
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const matchesStatus = productStatus === 'all' || product.status === productStatus;
       
-      // Only show 'new' or 'old' (published) products by default unless 'draft' or 'archived' is explicitly selected.
       const isPubliclyVisible = product.status === 'new' || product.status === 'old';
       if (productStatus === 'all') {
         return matchesSearchTerm && matchesCategory && matchesPrice && isPubliclyVisible;
@@ -128,7 +135,7 @@ export default function ProductsPage() {
         </div>
         <Slider
           min={0}
-          max={Math.max(...allProducts.map(p => p.price), 5000)} // Dynamic max based on products
+          max={Math.max(...allProducts.map(p => p.price), 50) || 5000} // Ensure max is at least 50 or default
           step={50}
           value={priceRange}
           onValueChange={(value) => setPriceRange(value as [number, number])}
@@ -152,7 +159,7 @@ export default function ProductsPage() {
             </div>
           ))}
         </div>
-         <p className="text-xs text-muted-foreground mt-1">Note: 'Draft' and 'Archived' are typically admin-only views.</p>
+         <p className="text-xs text-muted-foreground mt-1">Note: 'Draft' and 'Archived' are typically admin-only views. 'All' shows published by default.</p>
       </div>
       <Button onClick={() => setIsFilterSidebarOpen(false)} className="w-full md:hidden">
         Apply Filters
@@ -160,10 +167,21 @@ export default function ProductsPage() {
     </div>
   );
 
-  if (isLoading && allProducts.length === 0) { // Show loader only on initial full load
+  if (isLoading && allProducts.length === 0) { 
      return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error && allProducts.length === 0) {
+    return (
+      <div className="text-center py-20 text-destructive">
+        <AlertTriangle className="mx-auto h-16 w-16 mb-4" />
+        <p className="text-xl font-semibold">Error Loading Products</p>
+        <p>{error}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">Try Again</Button>
       </div>
     );
   }
@@ -214,7 +232,7 @@ export default function ProductsPage() {
 
       <main className="w-full md:w-3/4 lg:w-4/5">
         <h1 className="text-3xl font-headline font-bold mb-8">Our Collection</h1>
-        {isLoading && allProducts.length > 0 ? ( // Show subtle loading for filter changes
+        {isLoading && allProducts.length > 0 ? ( 
           <div className="text-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p>Filtering...</p></div>
         ) : filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

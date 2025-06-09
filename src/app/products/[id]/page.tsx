@@ -2,13 +2,13 @@
 "use client";
 
 import { useParams, useRouter } from 'next/navigation';
-import { getProductBySlug, type Product as ProductType } from '@/lib/products'; // Updated
+import { getProductBySlugFromFirestore, type Product as ProductType } from '@/lib/products'; 
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import ProductRecommendations from '@/components/ai/ProductRecommendations';
-import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize, Loader2, AlertTriangle } from 'lucide-react'; // Added Loader2, AlertTriangle
+import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize, Loader2, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useEffect, useState } from 'react';
@@ -19,39 +19,41 @@ export default function ProductDetailPage() {
   const { toast } = useToast();
   const { addItem } = useCart();
   
-  const [product, setProduct] = useState<ProductType | null | undefined>(undefined); // undefined for loading state
+  const [product, setProduct] = useState<ProductType | null | undefined>(undefined); 
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [browsingHistoryForAI, setBrowsingHistoryForAI] = useState<string>("");
 
   useEffect(() => {
     async function loadProduct() {
       setIsLoading(true);
+      setError(null);
       if (params.id) {
         const slug = Array.isArray(params.id) ? params.id[0] : params.id;
         try {
-          const foundProduct = await getProductBySlug(slug); // Assuming this is now async
+          const foundProduct = await getProductBySlugFromFirestore(slug);
+          setProduct(foundProduct || null); // Set to null if not found
           if (foundProduct) {
-            setProduct(foundProduct);
             const history = localStorage.getItem('browsingHistory') || '';
-            const newHistory = `${history}, ${foundProduct.name}`.replace(/^,|,$/, '').trim().split(',').slice(-5).join(','); // Keep last 5
+            const newHistory = `${history}, ${foundProduct.name}`.replace(/^,|,$/, '').trim().split(',').slice(-5).join(',');
             localStorage.setItem('browsingHistory', newHistory);
             setBrowsingHistoryForAI(newHistory);
-          } else {
-            setProduct(null); // Explicitly set to null if not found
           }
-        } catch (error) {
-          console.error("Failed to load product:", error);
+        } catch (err: any) {
+          console.error("Failed to load product:", err);
+          setError(err.message || "Failed to load product details.");
           setProduct(null);
         }
       } else {
-        setProduct(null); // No ID, so no product
+        setError("Product ID is missing.");
+        setProduct(null); 
       }
       setIsLoading(false);
     }
     loadProduct();
   }, [params.id]);
 
-  if (isLoading || product === undefined) { // Show loading if isLoading or product state is initial undefined
+  if (isLoading || product === undefined) { 
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -60,12 +62,12 @@ export default function ProductDetailPage() {
     );
   }
 
-  if (product === null) { // Product explicitly not found or error occurred
+  if (error || product === null) {
      return (
       <div className="text-center py-20">
         <AlertTriangle className="mx-auto h-24 w-24 text-destructive mb-6" />
-        <h1 className="text-4xl font-bold font-headline mb-4">404 - Product Not Found</h1>
-        <p className="text-muted-foreground mb-8">The product you are looking for does not exist or may have been removed.</p>
+        <h1 className="text-4xl font-bold font-headline mb-4">Product Not Found</h1>
+        <p className="text-muted-foreground mb-4">{error || "The product you are looking for does not exist or may have been removed."}</p>
         <Button onClick={() => router.push('/products')} variant="outline">
           <ChevronLeft className="mr-2 h-4 w-4" /> Back to Products
         </Button>
@@ -73,8 +75,8 @@ export default function ProductDetailPage() {
     );
   }
 
-
   const handleAddToCart = () => {
+    if (!product) return;
     addItem(product);
     toast({
       title: "Added to Cart!",
@@ -98,15 +100,21 @@ export default function ProductDetailPage() {
             layout="fill"
             objectFit="cover"
             className="group-hover:scale-105 transition-transform duration-500"
+            priority
           />
-           <Badge variant={product.status === 'new' ? "default" : "secondary"} className="absolute top-4 left-4 capitalize neon-glow-primary">{product.status}</Badge>
+           <Badge 
+             variant={product.status === 'new' ? "default" : product.status === 'draft' || product.status === 'archived' ? "destructive" : "secondary"} 
+             className="absolute top-4 left-4 capitalize neon-glow-primary"
+           >
+             {product.status === 'ai-generated-temp' ? 'Processing' : product.status}
+           </Badge>
         </div>
 
         <div className="space-y-6">
           <h1 className="font-headline text-4xl font-bold text-glow-primary">{product.name}</h1>
           <p className="text-2xl font-semibold text-primary">${product.price.toFixed(2)}</p>
           
-          <div className="text-muted-foreground prose prose-sm max-w-none">
+          <div className="text-muted-foreground prose prose-sm max-w-none dark:prose-invert">
             <p>{product.description}</p>
           </div>
 
@@ -135,7 +143,7 @@ export default function ProductDetailPage() {
               </div>
             )}
             <div className="flex items-center">
-                <Layers className="h-5 w-5 mr-2 text-muted-foreground" /> {/* Using Layers as generic icon for stock */}
+                <Layers className="h-5 w-5 mr-2 text-muted-foreground" /> 
                 <span className="font-medium">Stock:</span>
                 <span className="ml-2 text-foreground">{product.stock > 0 ? `${product.stock} available` : 'Out of Stock'}</span>
             </div>
