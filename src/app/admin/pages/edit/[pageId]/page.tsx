@@ -84,7 +84,7 @@ export default function EditPage() {
   const { getPageById, getPageBySlug, updatePage, isLoading: settingsLoading } = useSettings();
   const { toast } = useToast();
   
-  const pageId = typeof params.pageId === 'string' ? params.pageId : undefined;
+  const pageId = typeof params?.pageId === 'string' ? params.pageId : undefined;
 
   const [pageData, setPageData] = useState<PageConfig | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

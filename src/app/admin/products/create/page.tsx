@@ -98,7 +98,7 @@ export default function CreateProductPage() {
         setManualImagePreview(null); 
         setValue("image", undefined); 
         toast({ title: "AI Image Generated!", description: "Review the generated image below. Save product to store it." });
-      } else if (result.imageDataUri && result.imageDataUri.startsWith('https://placehold.co')) {
+      } else if (result.imageDataUri && (result.imageDataUri.startsWith('https://placehold.co') || result.imageDataUri.startsWith('https://via.placeholder.com'))) {
         setAiGeneratedImagePreview(result.imageDataUri);
         setManualImagePreview(null);
         setValue("image", undefined);
@@ -114,7 +114,12 @@ export default function CreateProductPage() {
         variant: "destructive",
         duration: 15000,
        });
-      setAiGeneratedImagePreview(`https://placehold.co/300x200.png?text=AI+Gen+Client+Error`);
+      setAiGeneratedImagePreview(`data:image/svg+xml;base64,${btoa(`
+        <svg width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#dc3545"/>
+          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#ffffff" text-anchor="middle" dy=".3em">AI Gen Client Error</text>
+        </svg>
+      `)}`);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -138,12 +143,18 @@ export default function CreateProductPage() {
       imagePathForDb = `products/images/ai-generated/${data.slug}-${Date.now()}.png`; // Assume png for AI
       productStatusForDb = 'ai-generated-temp'; // Temp status to indicate AI image needs upload by backend
       console.log("Using AI-generated image data URI for upload.");
-    } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('https://placehold.co')) {
-      imageUrlForDb = aiGeneratedImagePreview; 
+    } else if (aiGeneratedImagePreview && (aiGeneratedImagePreview.startsWith('https://placehold.co') || aiGeneratedImagePreview.startsWith('https://via.placeholder.com'))) {
+      imageUrlForDb = aiGeneratedImagePreview;
       imagePathForDb = `placeholders/ai-failed/${data.slug}.png`;
       console.log("Using placeholder image from AI generation attempt.");
     } else {
-      imageUrlForDb = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0, 15))}`;
+      const productName = data.name.substring(0, 15);
+      imageUrlForDb = `data:image/svg+xml;base64,${btoa(`
+        <svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#f8f9fa"/>
+          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="18" fill="#6c757d" text-anchor="middle" dy=".3em">${productName}</text>
+        </svg>
+      `)}`;
       imagePathForDb = `placeholders/default/${data.slug}.png`;
       console.log("Using default placeholder image.");
     }
@@ -165,15 +176,44 @@ export default function CreateProductPage() {
     };
     
     try {
+        console.log("🚀 Starting product creation process...");
         const newProductId = await addProductToFirestore(productToSave);
+
         if (newProductId) {
-            toast({
-                title: "Product Created Successfully!",
-                description: `The product "${productToSave.name}" has been saved to the database.`,
-            });
+            console.log(`✅ Product created successfully with ID: ${newProductId}`);
+
+            // Check if this is a local storage fallback ID
+            const isLocalFallback = newProductId.startsWith('local_');
+
+            // Check if the product has image upload issues
+            const hasImageUploadIssue = (productToSave.imageUrl?.includes('placehold.co') || productToSave.imageUrl?.includes('via.placeholder.com') || productToSave.imageUrl?.startsWith('data:image/svg+xml')) &&
+                                       (manualImagePreview || aiGeneratedImagePreview);
+
+            if (isLocalFallback) {
+                toast({
+                    title: "Product Saved Locally",
+                    description: `The product "${productToSave.name}" was saved to local storage due to database connection issues. It will sync when the connection is restored.`,
+                    variant: "default",
+                    duration: 10000,
+                });
+            } else if (hasImageUploadIssue) {
+                toast({
+                    title: "Product Created with Image Issue",
+                    description: `The product "${productToSave.name}" was saved, but the image upload failed due to Firebase Storage permissions. You can edit the product later to add the image.`,
+                    variant: "default",
+                    duration: 8000,
+                });
+            } else {
+                toast({
+                    title: "Product Created Successfully!",
+                    description: `The product "${productToSave.name}" has been saved to the database.`,
+                });
+            }
+
+            // Always redirect to manage page, even for local storage saves
             router.push('/admin/products/manage');
         } else {
-            // This case implies addProductToFirestore returned null without throwing an error, which shouldn't happen with current implementation
+            console.error("❌ Product creation returned null ID");
             toast({
                 title: "Error Creating Product",
                 description: "There was an issue saving the product. No ID returned.",
@@ -181,13 +221,42 @@ export default function CreateProductPage() {
             });
         }
     } catch (error: any) {
-        console.error("Error during product submission process:", error);
-        toast({
-            title: "Error Creating Product",
-            description: error.message || "An unexpected error occurred. Please check console and server logs.",
-            variant: "destructive",
-            duration: 10000,
-        });
+        console.error("❌ Error during product submission process:", error);
+
+        // Provide specific error messages based on error type
+        if (error.message && error.message.includes('database is experiencing connection issues')) {
+            toast({
+                title: "Database Connection Issue",
+                description: "The database is experiencing connection issues. Please try again in a moment.",
+                variant: "destructive",
+                duration: 12000,
+            });
+        } else if (error.message && error.message.includes('Complete save failure')) {
+            toast({
+                title: "Critical Save Error",
+                description: "Unable to save the product to either the database or local storage. Please check your browser settings and try again.",
+                variant: "destructive",
+                duration: 15000,
+            });
+        } else if (error.message && (
+            error.message.includes('Firebase Storage') ||
+            error.message.includes('storage/unauthorized') ||
+            error.message.includes('CORS')
+        )) {
+            toast({
+                title: "Storage Configuration Issue",
+                description: "Product creation failed due to Firebase Storage permissions. Please check your Firebase Storage security rules and CORS configuration.",
+                variant: "destructive",
+                duration: 12000,
+            });
+        } else {
+            toast({
+                title: "Error Creating Product",
+                description: error.message || "An unexpected error occurred. Please try again.",
+                variant: "destructive",
+                duration: 10000,
+            });
+        }
     } finally {
         setIsSubmitting(false);
     }

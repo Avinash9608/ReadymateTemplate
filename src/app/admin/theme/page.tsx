@@ -48,7 +48,7 @@ export default function AdminThemePage() {
   // More colors can be added: background, foreground
 
   useEffect(() => {
-    if (!isLoading && (!user || !user.isAdmin)) {
+    if (!isLoading && (!user || !user.role)) {
       toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
       router.push('/');
     }
@@ -94,7 +94,7 @@ export default function AdminThemePage() {
     });
   };
 
-  if (isLoading || !user || !user.isAdmin) {
+  if (isLoading || !user || !user.role) {
     return <div className="text-center py-10">Checking permissions...</div>;
   }
 

@@ -40,7 +40,12 @@ const generateProductImageFlow = ai.defineFlow(
     outputSchema: GenerateProductImageOutputSchema,
   },
   async (input) => {
-    const placeholderOnError = `https://placehold.co/600x400.png?text=AI+Gen+Error`;
+    const placeholderOnError = `data:image/svg+xml;base64,${Buffer.from(`
+      <svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#dc3545"/>
+        <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="18" fill="#ffffff" text-anchor="middle" dy=".3em">AI Gen Error</text>
+      </svg>
+    `).toString('base64')}`;
     console.log(`[Flow Execution] Attempting to generate image for: "${input.productName}", hint: "${input.dataAiHint || 'None'}"`);
     try {
       const { media } = await ai.generate({
@@ -59,7 +64,12 @@ const generateProductImageFlow = ai.defineFlow(
         return { imageDataUri: media.url };
       } else {
         console.warn("[Flow Execution] AI image generation returned no valid media URL or not a data URI. Media URL:", media?.url, "Using placeholder.");
-        return { imageDataUri: `https://placehold.co/600x400.png?text=AI+Img+Invalid` }; // More specific placeholder
+        return { imageDataUri: `data:image/svg+xml;base64,${Buffer.from(`
+          <svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#ffc107"/>
+            <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="18" fill="#000000" text-anchor="middle" dy=".3em">AI Img Invalid</text>
+          </svg>
+        `).toString('base64')}` }; // More specific placeholder
       }
     } catch (error: any) {
       // Enhanced error logging

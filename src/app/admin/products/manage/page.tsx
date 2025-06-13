@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
+import ImageWithFallback from '@/components/ui/ImageWithFallback';
 
 export default function ManageProductsPage() {
   const { toast } = useToast();
@@ -140,11 +141,16 @@ export default function ManageProductsPage() {
                   {products.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell>
-                        <Image
-                          src={product.imageUrl || `https://placehold.co/64x64.png?text=${product.name.substring(0,1)}`}
+                        <ImageWithFallback
+                          src={product.imageUrl || `data:image/svg+xml;base64,${btoa(`
+                            <svg width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+                              <rect width="100%" height="100%" fill="#f8f9fa"/>
+                              <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="24" fill="#6c757d" text-anchor="middle" dy=".3em">${product.name.substring(0,1)}</text>
+                            </svg>
+                          `)}`}
                           alt={product.name}
-                          data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ").toLowerCase()}
-                          width={64} height={64}
+                          width={64}
+                          height={64}
                           className="rounded-md object-cover aspect-square bg-muted"
                         />
                       </TableCell>

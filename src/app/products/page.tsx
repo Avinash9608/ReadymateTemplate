@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
+import ImageWithFallback from '@/components/ui/ImageWithFallback';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Zap, Filter, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +26,7 @@ interface InitialCategoryHandlerProps {
 
 function InitialCategoryHandler({ setSelectedCategory }: InitialCategoryHandlerProps) {
   const searchParams = useSearchParams();
-  const initialCategory = searchParams.get('category');
+  const initialCategory = searchParams?.get('category');
 
   useEffect(() => {
     if (initialCategory) {
@@ -54,7 +56,7 @@ export default function ProductsPage() {
       setError(null);
       try {
         const [fetchedProducts, fetchedCategories] = await Promise.all([
-          getProductsFromFirestore({status: 'all', includeDraftArchived: true}), // Fetch all for admin-like filtering
+          getProductsFromFirestore({status: 'all', includeDraftArchived: true}), // Fetch all products including drafts
           getCategoriesFromFirestore()
         ]);
         setAllProducts(fetchedProducts);
@@ -90,7 +92,9 @@ export default function ProductsPage() {
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const matchesStatus = productStatus === 'all' || product.status === productStatus;
       
-      const isPubliclyVisible = product.status === 'new' || product.status === 'old';
+      // Show all products by default, including drafts (for testing/admin view)
+      // In production, you might want to filter out drafts for public users
+      const isPubliclyVisible = product.status === 'new' || product.status === 'old' || product.status === 'draft';
       if (productStatus === 'all') {
         return matchesSearchTerm && matchesCategory && matchesPrice && isPubliclyVisible;
       }
@@ -240,21 +244,36 @@ export default function ProductsPage() {
                 className="overflow-hidden hover:shadow-xl transition-shadow duration-300 group flex flex-col"
               >
                 <CardHeader className="p-0">
-                  <Image
-                    src={product.imageUrl || `https://placehold.co/600x400.png?text=No+Image`}
+                  <ImageWithFallback
+                    src={product.imageUrl || `data:image/svg+xml;base64,${btoa(`
+                      <svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="100%" height="100%" fill="#f8f9fa"/>
+                        <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="18" fill="#6c757d" text-anchor="middle" dy=".3em">No Image</text>
+                      </svg>
+                    `)}`}
                     alt={product.name}
-                    data-ai-hint={product.dataAiHint || product.name.split(" ").slice(0,2).join(" ")}
                     width={600}
                     height={400}
                     className="object-cover w-full h-56 group-hover:scale-105 transition-transform duration-300"
                   />
                 </CardHeader>
                 <CardContent className="pt-4 flex-grow">
-                  <CardTitle className="font-headline text-lg mb-1">{product.name}</CardTitle>
+                  <div className="flex justify-between items-start mb-2">
+                    <CardTitle className="font-headline text-lg">{product.name}</CardTitle>
+                    {product.status === 'draft' && (
+                      <Badge variant="secondary" className="text-xs">Draft</Badge>
+                    )}
+                    {product.status === 'new' && (
+                      <Badge variant="default" className="text-xs">New</Badge>
+                    )}
+                  </div>
                   <CardDescription className="text-sm text-muted-foreground mb-2 line-clamp-2">
                     {product.description}
                   </CardDescription>
-                  <p className="text-primary font-semibold text-md">${product.price.toFixed(2)}</p>
+                  <div className="flex justify-between items-center">
+                    <p className="text-primary font-semibold text-md">${product.price.toFixed(2)}</p>
+                    <Badge variant="outline" className="text-xs">{product.category}</Badge>
+                  </div>
                 </CardContent>
                 <CardFooter>
                   <Link href={`/products/${product.slug}`} className="w-full">

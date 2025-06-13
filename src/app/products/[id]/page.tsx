@@ -6,6 +6,8 @@ import { getProductBySlugFromFirestore, type Product as ProductType } from '@/li
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { addToCart } from '@/lib/cart';
 import { useToast } from '@/hooks/use-toast';
 import ProductRecommendations from '@/components/ai/ProductRecommendations';
 import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize, Loader2, AlertTriangle } from 'lucide-react';
@@ -18,6 +20,7 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { addItem } = useCart();
+  const { user } = useAuth();
   
   const [product, setProduct] = useState<ProductType | null | undefined>(undefined); 
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +31,7 @@ export default function ProductDetailPage() {
     async function loadProduct() {
       setIsLoading(true);
       setError(null);
-      if (params.id) {
+      if (params?.id) {
         const slug = Array.isArray(params.id) ? params.id[0] : params.id;
         try {
           const foundProduct = await getProductBySlugFromFirestore(slug);
@@ -51,7 +54,7 @@ export default function ProductDetailPage() {
       setIsLoading(false);
     }
     loadProduct();
-  }, [params.id]);
+  }, [params?.id]);
 
   if (isLoading || product === undefined) { 
     return (
@@ -75,14 +78,57 @@ export default function ProductDetailPage() {
     );
   }
 
-  const handleAddToCart = () => {
-    if (!product) return;
-    addItem(product);
-    toast({
-      title: "Added to Cart!",
-      description: `${product.name} has been added to your shopping cart.`,
-      className: "bg-primary text-primary-foreground"
-    });
+  const handleAddToCart = async () => {
+    console.log('🛒 handleAddToCart called');
+    console.log('👤 User:', user);
+    console.log('📦 Product:', product);
+
+    if (!product) {
+      toast({
+        title: "Error",
+        description: "Product information is missing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Please Login",
+        description: "You need to be logged in to add items to cart.",
+        variant: "destructive",
+      });
+      router.push('/auth/login?redirect=' + encodeURIComponent(window.location.pathname));
+      return;
+    }
+
+    if (!user.uid) {
+      console.error('❌ User object exists but uid is missing:', user);
+      toast({
+        title: "Authentication Error",
+        description: "Please log out and log back in.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('🚀 Calling addToCart with:', { userId: user.uid, productId: product.id });
+      await addToCart(user.uid, product, 1);
+      addItem(product); // Also update local cart context for immediate UI feedback
+      toast({
+        title: "Added to Cart!",
+        description: `${product.name} has been added to your shopping cart.`,
+        className: "bg-primary text-primary-foreground"
+      });
+    } catch (error: any) {
+      console.error('❌ Error adding to cart:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add item to cart. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

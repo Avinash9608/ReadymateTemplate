@@ -54,7 +54,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-col md:flex-row gap-8">
         <aside className="w-full md:w-1/4 lg:w-1/5">
           <div className="p-4 rounded-lg border bg-card shadow-sm">
-            <h2 className="text-xl font-headline font-semibold mb-1">{user.name || user.email}</h2>
+            <h2 className="text-xl font-headline font-semibold mb-1">{user.displayName || user.email}</h2>
             <p className="text-sm text-muted-foreground mb-4">{user.email}</p>
             <Separator />
             <nav className="mt-4 space-y-1">
@@ -69,13 +69,13 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
                   </Button>
                 </Link>
               ))}
-              {user.isAdmin && (
+              {user.role==="admin" && (
                 <>
                   <Separator className="my-2" />
                   <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Admin Panel</p>
                   {adminNavItems.map((item) => (
                      <Link key={item.name} href={item.href} passHref>
-                      <Button variant={pathname.startsWith(item.href) ? 'secondary' : 'ghost'} className="w-full justify-start">
+                      <Button variant={pathname?.startsWith(item.href) ? 'secondary' : 'ghost'} className="w-full justify-start">
                         <item.icon className="mr-2 h-4 w-4" /> {item.name}
                       </Button>
                     </Link>

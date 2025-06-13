@@ -451,6 +451,8 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Redirect if user is already logged in (removed useEffect for now to focus on registration fix)
+
   const { 
     register, 
     handleSubmit, 
@@ -464,33 +466,44 @@ export default function RegisterPage() {
   // filepath: app/register/page.tsx
 const onSubmit: SubmitHandler<RegisterFormValues> = async (data) => {
     setIsSubmitting(true);
+    console.log("Starting registration for:", data.email);
+
     try {
         const result = await registerUser(data.email, data.password, data.name);
-        console.log("Registration Result:", result); // Add this line
+        console.log("Registration Result:", result);
+
         if (result?.success) {
+            console.log("Registration successful, showing success state");
             setIsSuccess(true);
             toast({
                 title: "Registration Successful!",
-                description: "Your account has been created successfully.",
+                description: "Your account has been created successfully. You can now log in.",
                 action: <CheckCircle className="text-green-500" />,
             });
-            // Optionally reset the form after successful registration
+            // Reset the form after successful registration
             reset();
-            router.push('/login');
+            // Redirect to login after a short delay to show success message
+            setTimeout(() => {
+                router.push('/login');
+            }, 2000);
         } else {
+            console.error("Registration failed:", result?.error);
             toast({
                 title: "Registration Failed",
-                description: result?.error || "An error occurred during registration.",
+                description: result?.error || "An error occurred during registration. Please try again.",
                 variant: "destructive",
             });
         }
     } catch (error) {
+        console.error("Registration error caught:", error);
+        const errorMessage = error instanceof Error ? error.message : "Something went wrong. Please try again later.";
         toast({
             title: "Unexpected Error",
-            description: "Something went wrong. Please try again later.",
+            description: errorMessage,
             variant: "destructive",
         });
     } finally {
+        console.log("Registration process completed, setting isSubmitting to false");
         setIsSubmitting(false);
     }
 };

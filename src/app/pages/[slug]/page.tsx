@@ -158,7 +158,7 @@ export default function DynamicPage() {
   const { getPageBySlug, isLoading: settingsLoading } = useSettings();
   const [pageConfig, setPageConfig] = useState<PageConfig | null | 'loading'>('loading');
 
-  const slug = typeof params.slug === 'string' ? params.slug : params.slug?.[0];
+  const slug = typeof params?.slug === 'string' ? params.slug : params?.slug?.[0];
 
   useEffect(() => {
     if (settingsLoading) {

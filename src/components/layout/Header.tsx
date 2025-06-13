@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Logo from '@/components/shared/Logo';
 import ThemeToggle from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List, FilePlus } from 'lucide-react';
+import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List, FilePlus, Package, LayoutDashboard } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -31,8 +31,11 @@ const NavLinkExternal = ({ href, children }: { href: string; children: React.Rea
 export default function Header() {
   const { cartItemCount } = useCart();
   const { user, logout } = useAuth();
-  const { settings, isLoading: settingsLoading } = useSettings(); 
+  const { settings, isLoading: settingsLoading } = useSettings();
   const router = useRouter();
+
+  // Handle both old and new user structures for admin check
+  const isAdmin = user?.role === 'admin' || (user as any)?.isAdmin === true;
 
   const handleLogout = () => {
     logout();
@@ -97,26 +100,47 @@ export default function Header() {
               </Button>
             </Link>
           )}
-           {user?.isAdmin && (
+           {isAdmin && (
             <div className="hidden sm:flex items-center space-x-1">
-               <Link href="/admin/navbar" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Navbar Settings">
-                  <List className="h-4 w-4" /> 
+              <Link href="/admin/products/manage" passHref>
+                <Button variant="outline" size="sm" aria-label="Manage Products">
+                  <Package className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/products/create" passHref>
+                <Button variant="outline" size="sm" aria-label="Create Product">
+                  <FilePlus className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/pages/manage" passHref>
+                <Button variant="outline" size="sm" aria-label="Manage Pages">
+                  <LayoutDashboard className="h-4 w-4" />
                 </Button>
               </Link>
               <Link href="/admin/pages/create" passHref>
-                <Button variant="outline" size="sm" aria-label="Create New Page">
-                    <FilePlus className="h-4 w-4" />
+                <Button variant="outline" size="sm" aria-label="Create Page">
+                  <FilePlus className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/admin/theme" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Theme Settings">
-                  <PackageSearch className="h-4 w-4" /> 
+              <Link href="/admin/navbar" passHref>
+                <Button variant="outline" size="sm" aria-label="Navbar Settings">
+                  <List className="h-4 w-4" />
                 </Button>
               </Link>
-               <Link href="/admin/settings" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Site Settings">
+              <Link href="/admin/settings" passHref>
+                <Button variant="outline" size="sm" aria-label="Site Settings">
                   <Settings className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+           )}
+
+           {/* Mobile Admin Menu */}
+           {isAdmin && (
+            <div className="sm:hidden">
+              <Link href="/admin/dashboard" passHref>
+                <Button variant="outline" size="sm" aria-label="Admin Dashboard">
+                  <LayoutDashboard className="h-4 w-4" />
                 </Button>
               </Link>
             </div>

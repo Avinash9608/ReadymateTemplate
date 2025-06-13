@@ -619,12 +619,24 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 interface User {
-  id: string;
+  uid: string;
   email: string;
-  name?: string;
-  isAdmin?: boolean;
-  profileImage?: string;
-  createdAt?: string;
+  displayName?: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+  updatedAt: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      country?: string;
+    };
+  };
 }
 
 interface AuthState {
@@ -693,60 +705,149 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const uid = firebaseUser.uid;
     const cachedUser = localStorage.getItem(`furnishverse-user-${uid}`);
 
-    if (!isOnline && cachedUser) {
-      return JSON.parse(cachedUser);
+    // Check if cached user has the correct structure (uid instead of id)
+    let validCachedUser = null;
+    if (cachedUser) {
+      try {
+        const parsed = JSON.parse(cachedUser);
+        // Only use cached data if it has the correct structure with 'uid'
+        if (parsed.uid && !parsed.id) {
+          validCachedUser = parsed;
+        } else {
+          console.log('Clearing invalid cached user data (old structure with id instead of uid)');
+          localStorage.removeItem(`furnishverse-user-${uid}`);
+        }
+      } catch (error) {
+        console.log('Clearing corrupted cached user data');
+        localStorage.removeItem(`furnishverse-user-${uid}`);
+      }
+    }
+
+    // Always try cached data first if offline
+    if (!isOnline && validCachedUser) {
+      console.log('Using cached user data (offline mode)');
+      return validCachedUser;
     }
 
     try {
-      const docSnap = await getDoc(doc(db, 'users', uid));
-      
+      console.log('Attempting to fetch user data from Firestore for UID:', uid);
+
+      // Add timeout to prevent hanging on Firestore reads
+      const firestoreTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore read timed out after 3 seconds')), 3000)
+      );
+
+      const firestoreRead = getDoc(doc(db, 'users', uid));
+      const docSnap = await Promise.race([firestoreRead, firestoreTimeout]);
+
       if (docSnap.exists()) {
-        const userData = docSnap.data() as User;
+        const rawUserData = docSnap.data();
+        console.log('Raw user data from Firestore:', rawUserData);
+
+        // Convert old structure to new structure if needed
+        let userData: User;
+        if (rawUserData.id && !rawUserData.uid) {
+          console.log('Converting old user structure to new structure...');
+          userData = {
+            uid: rawUserData.id, // Convert id to uid
+            email: rawUserData.email || '',
+            displayName: rawUserData.name || rawUserData.displayName || '',
+            role: rawUserData.isAdmin ? 'admin' : 'user', // Convert isAdmin to role
+            createdAt: rawUserData.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            profile: {
+              firstName: rawUserData.name?.split(' ')[0] || '',
+              lastName: rawUserData.name?.split(' ').slice(1).join(' ') || '',
+            }
+          };
+
+          // Update Firestore with new structure
+          try {
+            await setDoc(doc(db, 'users', uid), userData);
+            console.log('✅ Updated user document with new structure');
+          } catch (updateError) {
+            console.warn('⚠️ Failed to update user document structure:', updateError);
+          }
+        } else {
+          userData = rawUserData as User;
+        }
+
         localStorage.setItem(`furnishverse-user-${uid}`, JSON.stringify(userData));
+        console.log('User data processed successfully:', userData);
         return userData;
       }
 
+      console.log('User document does not exist, creating new user data');
       const newUserData: User = {
-        id: uid,
+        uid: uid,
         email: firebaseUser.email || '',
-        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'New User',
-        isAdmin: false,
-        createdAt: new Date().toISOString()
+        displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'New User',
+        role: 'user',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
-      
-      await setDoc(doc(db, 'users', uid), newUserData);
+
+      // Try to save to Firestore with timeout, but don't fail if it doesn't work
+      try {
+        const firestoreTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Firestore write timed out after 3 seconds')), 3000)
+        );
+
+        const firestoreWrite = setDoc(doc(db, 'users', uid), newUserData);
+        await Promise.race([firestoreWrite, firestoreTimeout]);
+        console.log('New user data saved to Firestore successfully');
+      } catch (firestoreError) {
+        console.warn('Failed to save user data to Firestore, proceeding with local storage only:', firestoreError);
+      }
+
       localStorage.setItem(`furnishverse-user-${uid}`, JSON.stringify(newUserData));
       return newUserData;
     } catch (error) {
-      if (isFirestoreError(error) && (error.code === 'unavailable' || error.code === 'failed-precondition')) {
-        if (cachedUser) return JSON.parse(cachedUser);
-        return {
-          id: uid,
-          email: firebaseUser.email || '',
-          name: firebaseUser.displayName || 'User',
-          isAdmin: false
-        };
+      console.error('Error in getUserData:', error);
+
+      // If we have cached data, use it as fallback
+      if (validCachedUser) {
+        console.log('Using cached user data as fallback due to Firestore error');
+        return validCachedUser;
       }
-      throw error;
+
+      // If no cached data, create a minimal user object
+      console.log('Creating minimal user object as fallback');
+      const fallbackUser: User = {
+        uid: uid,
+        email: firebaseUser.email || '',
+        displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        role: 'user',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Save to local storage for future use
+      localStorage.setItem(`furnishverse-user-${uid}`, JSON.stringify(fallbackUser));
+      return fallbackUser;
     }
   }, [isOnline]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log('Auth state changed:', firebaseUser ? `User: ${firebaseUser.email}` : 'No user');
+
       if (firebaseUser) {
         try {
           const userData = await getUserData(firebaseUser);
           setUser(userData);
           setError(null);
+          console.log('User data loaded successfully');
         } catch (error) {
-          if (!isFirestoreError(error) || 
-             (error.code !== 'unavailable' && error.code !== 'failed-precondition')) {
-            console.error('Auth state error:', error);
+          console.error('Auth state error:', error);
+          // Don't set error for Firestore connection issues, as we have fallbacks
+          if (!isFirestoreError(error)) {
             setError('Failed to load user data');
           }
         }
       } else {
         setUser(null);
+        console.log('User logged out');
       }
       setIsLoading(false);
     });
@@ -822,8 +923,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
-// Add to your AuthContext.tsx
-const [firestoreError, setFirestoreError] = useState<FirestoreError | null>(null);
+// Enhanced register function with better error handling
 
 // Modify your register function
 const register = async (
@@ -838,14 +938,16 @@ const register = async (
 
   setIsLoading(true);
   setError(null);
-  setFirestoreError(null);
-  
+
   try {
+    console.log('Starting registration process for:', email);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const uid = cred.user.uid;
+    console.log('Firebase Auth user created with UID:', uid);
 
     if (name) {
       await updateProfile(cred.user, { displayName: name });
+      console.log('Profile updated with display name:', name);
     }
 
     let imageUrl = '';
@@ -854,54 +956,55 @@ const register = async (
         const fileRef = ref(storage, `users/${uid}/profile.jpg`);
         await uploadBytes(fileRef, file);
         imageUrl = await getDownloadURL(fileRef);
+        console.log('Profile image uploaded successfully');
       } catch (error) {
         console.error('Profile image upload failed:', error);
+        // Don't fail registration if image upload fails
       }
     }
 
     const userData: User = {
-      id: uid,
+      uid: uid,
       email,
-      name: name || email.split('@')[0] || 'New User',
-      isAdmin: false,
-      profileImage: imageUrl,
-      createdAt: new Date().toISOString()
+      displayName: name || email.split('@')[0] || 'New User',
+      role: 'user',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    // Add retry logic for Firestore writes
-    let attempts = 0;
-    const maxAttempts = 3;
-    let lastError: FirestoreError | null = null;
-
-    while (attempts < maxAttempts) {
-      try {
-        await setDoc(doc(db, 'users', uid), userData);
-        lastError = null;
-        break;
-      } catch (error) {
-        if (isFirestoreError(error)) {
-          lastError = error;
-          attempts++;
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Exponential backoff
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    if (lastError) {
-      setFirestoreError(lastError);
-      throw lastError;
-    }
-
+    // Save to local storage immediately (this always works and doesn't depend on network)
     localStorage.setItem(`furnishverse-user-${uid}`, JSON.stringify(userData));
+    console.log('✅ User data saved to local storage');
+
+    // Set user in context immediately (don't wait for Firestore)
     setUser(userData);
-    
+    console.log('✅ User set in context');
+
+    // Try to save to Firestore in background with timeout (don't block registration on this)
+    console.log('Attempting to save user data to Firestore with timeout...');
+
+    const firestoreTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore operation timed out after 3 seconds')), 3000)
+    );
+
+    const firestoreSave = setDoc(doc(db, 'users', uid), userData);
+
+    try {
+      await Promise.race([firestoreSave, firestoreTimeout]);
+      console.log('✅ User data saved to Firestore successfully');
+    } catch (error) {
+      console.warn('⚠️ Firestore save failed or timed out, but registration is still successful:', error);
+      // Don't fail the registration - the user account was created successfully in Firebase Auth
+      // and the data is saved in local storage
+    }
+
+    console.log('Registration completed successfully');
     return { success: true, user: userData };
-    
+
   } catch (error) {
+    console.error('Registration error:', error);
     let errorMessage = 'Registration failed. Please try again.';
-    
+
     if (isAuthError(error)) {
       switch (error.code) {
         case 'auth/email-already-in-use':
@@ -913,12 +1016,20 @@ const register = async (
         case 'auth/weak-password':
           errorMessage = 'Password should be at least 6 characters.';
           break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
+        default:
+          errorMessage = `Authentication error: ${error.message}`;
       }
     } else if (isFirestoreError(error)) {
-      errorMessage = 'Database connection issue. Please check your internet.';
-      setFirestoreError(error);
+      errorMessage = 'Database connection issue. Please check your internet connection.';
+      console.error('Firestore error details:', error);
+    } else {
+      errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     }
-    
+
+    setError(errorMessage);
     return { success: false, error: errorMessage };
   } finally {
     setIsLoading(false);

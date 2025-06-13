@@ -45,10 +45,10 @@ function NavbarForm({
   useEffect(() => {
     if (paramsProcessed || isEditing) return;
 
-    const action = searchParams.get('action');
-    const label = searchParams.get('label');
-    const slugFromParams = searchParams.get('slug');
-    const typeFromParams = searchParams.get('type') as 'internal' | 'external' | null;
+    const action = searchParams?.get('action');
+    const label = searchParams?.get('label');
+    const slugFromParams = searchParams?.get('slug');
+    const typeFromParams = searchParams?.get('type') as 'internal' | 'external' | null;
 
     if (action === 'add' && label && slugFromParams && typeFromParams === 'internal') {
       setFormData({
@@ -179,7 +179,7 @@ export default function AdminNavbarPage() {
   const [paramsProcessed, setParamsProcessed] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || !user.isAdmin)) {
+    if (!authLoading && (!user || !user.role)) {
       toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
       router.push('/');
     }
@@ -205,7 +205,7 @@ export default function AdminNavbarPage() {
 
   const sortedNavItems = settings.navItems ? [...settings.navItems].sort((a, b) => a.order - b.order) : [];
 
-  if (authLoading || settingsLoading || !user || !user.isAdmin) {
+  if (authLoading || settingsLoading || !user || !user.role) {
     return <div className="text-center py-10 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading navbar settings...</div>;
   }
   

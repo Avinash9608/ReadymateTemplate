@@ -27,7 +27,7 @@ export default function AdminSettingsPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && (!user || !user.isAdmin)) {
+    if (!authLoading && (!user || !user.role)) {
       toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
       router.push('/');
     }
@@ -57,7 +57,7 @@ export default function AdminSettingsPage() {
     });
   };
 
-  if (authLoading || settingsLoading || !user || !user.isAdmin) {
+  if (authLoading || settingsLoading || !user || !user.role) {
     return <div className="text-center py-10">Loading settings...</div>;
   }
 
