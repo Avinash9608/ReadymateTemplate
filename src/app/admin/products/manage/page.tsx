@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProductsFromFirestore, deleteProductFromFirestore, type Product } from '@/lib/products';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -22,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
+import type { Product } from '@/lib/products';
 
 export default function ManageProductsPage() {
   const { toast } = useToast();
@@ -33,7 +32,8 @@ export default function ManageProductsPage() {
   const loadProducts = async () => {
     setIsLoading(true);
     try {
-      const fetchedProducts = await getProductsFromFirestore({ status: 'all', includeDraftArchived: true });
+      const response = await fetch('/api/products?status=all&includeDraftArchived=true');
+      const fetchedProducts: Product[] = await response.json();
       setProducts(fetchedProducts.sort((a, b) => 
         new Date(b.createdAt?.toString() || 0).getTime() - new Date(a.createdAt?.toString() || 0).getTime()
       ));
@@ -59,7 +59,9 @@ export default function ManageProductsPage() {
   const executeDeleteProduct = async () => {
     if (productToDelete) {
       try {
-        const success = await deleteProductFromFirestore(productToDelete.id, productToDelete.imagePath);
+        const res = await fetch(`/api/products/${productToDelete.id}`, { method: 'DELETE' });
+        const result = await res.json();
+        const success = result.success;
         if (success) {
           toast({
             title: "Product Deleted",

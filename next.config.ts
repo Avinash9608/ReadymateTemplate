@@ -1,4 +1,3 @@
-
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -20,10 +19,11 @@ const nextConfig: NextConfig = {
       {
         hostname: 'www.ironplane.com',
       },
- {
- hostname: 'encrypted-tbn0.gstatic.com',
- },
+      {
+        hostname: 'encrypted-tbn0.gstatic.com',
+      },
     ],
+    domains: ['res.cloudinary.com'],
   },
 };
 

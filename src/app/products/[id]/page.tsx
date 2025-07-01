@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useParams, useRouter } from 'next/navigation';
-import { getProductBySlugFromFirestore, type Product as ProductType } from '@/lib/products'; 
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
@@ -12,6 +10,7 @@ import { ChevronLeft, ShoppingCartIcon, Tag, Layers, Maximize, Loader2, AlertTri
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useEffect, useState } from 'react';
+import type { Product as ProductType } from '@/lib/products';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -31,7 +30,8 @@ export default function ProductDetailPage() {
       if (params.id) {
         const slug = Array.isArray(params.id) ? params.id[0] : params.id;
         try {
-          const foundProduct = await getProductBySlugFromFirestore(slug);
+          const response = await fetch(`/api/products/${slug}`);
+          const foundProduct: ProductType | undefined = await response.json();
           setProduct(foundProduct || null); // Set to null if not found
           if (foundProduct) {
             const history = localStorage.getItem('browsingHistory') || '';

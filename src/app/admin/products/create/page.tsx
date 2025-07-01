@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -16,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, PlusCircle, ShoppingBag, Sparkles } from 'lucide-react';
 import NextImage from 'next/image';
 import { generateProductImage } from '@/ai/flows/generate-product-image-flow';
-import { addProductToFirestore, type Product } from '@/lib/products'; 
+import type { Product } from '@/lib/products';
 
 const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -123,73 +122,52 @@ export default function CreateProductPage() {
   const onSubmit: SubmitHandler<ProductFormValues> = async (data) => {
     setIsSubmitting(true);
 
-    let imageUrlForDb: string | undefined = undefined;
-    let imagePathForDb: string | undefined = undefined;
-    // Default to the form's status, but allow override for AI image temp status
-    let productStatusForDb: Product['status'] = data.status; 
-
-    if (manualImagePreview) {
-      imageUrlForDb = manualImagePreview; // This will be a data URI
-      const fileExtension = data.image?.[0]?.name.split('.').pop() || 'jpg';
-      imagePathForDb = `products/images/manual/${data.slug}-${Date.now()}.${fileExtension}`;
-      console.log("Using manual image preview data URI for upload:", data.image?.[0]?.name);
-    } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('data:image')) {
-      imageUrlForDb = aiGeneratedImagePreview; // This is a data URI
-      imagePathForDb = `products/images/ai-generated/${data.slug}-${Date.now()}.png`; // Assume png for AI
-      productStatusForDb = 'ai-generated-temp'; // Temp status to indicate AI image needs upload by backend
-      console.log("Using AI-generated image data URI for upload.");
-    } else if (aiGeneratedImagePreview && aiGeneratedImagePreview.startsWith('https://placehold.co')) {
-      imageUrlForDb = aiGeneratedImagePreview; 
-      imagePathForDb = `placeholders/ai-failed/${data.slug}.png`;
-      console.log("Using placeholder image from AI generation attempt.");
-    } else {
-      imageUrlForDb = `https://placehold.co/600x400.png?text=${encodeURIComponent(data.name.substring(0, 15))}`;
-      imagePathForDb = `placeholders/default/${data.slug}.png`;
-      console.log("Using default placeholder image.");
+    // Prepare FormData for API
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('slug', data.slug);
+    formData.append('description', data.description);
+    formData.append('price', String(data.price));
+    formData.append('category', data.category);
+    formData.append('status', data.status);
+    formData.append('stock', String(data.stock));
+    if (data.dataAiHint) formData.append('dataAiHint', data.dataAiHint);
+    if (data.features) formData.append('features', data.features);
+    if (data.dimensions) formData.append('dimensions', data.dimensions);
+    if (data.material) formData.append('material', data.material);
+    if (data.image && data.image.length > 0) {
+      formData.append('image', data.image[0]);
     }
 
-    const productToSave: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
-      name: data.name,
-      slug: data.slug,
-      description: data.description,
-      price: data.price,
-      category: data.category,
-      status: productStatusForDb,
-      stock: data.stock,
-      imageUrl: imageUrlForDb, 
-      imagePath: imagePathForDb,
-      dataAiHint: data.dataAiHint || data.name.split(" ").slice(0, 2).join(" ").toLowerCase(),
-      features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      dimensions: data.dimensions,
-      material: data.material,
-    };
-    
     try {
-        const newProductId = await addProductToFirestore(productToSave);
-        if (newProductId) {
-            toast({
-                title: "Product Created Successfully!",
-                description: `The product "${productToSave.name}" has been saved to the database.`,
-            });
-            router.push('/admin/products/manage');
-        } else {
-            // This case implies addProductToFirestore returned null without throwing an error, which shouldn't happen with current implementation
-            toast({
-                title: "Error Creating Product",
-                description: "There was an issue saving the product. No ID returned.",
-                variant: "destructive",
-            });
-        }
-    } catch (error: any) {
-        console.error("Error during product submission process:", error);
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.success) {
         toast({
-            title: "Error Creating Product",
-            description: error.message || "An unexpected error occurred. Please check console and server logs.",
-            variant: "destructive",
-            duration: 10000,
+          title: 'Product Created Successfully!',
+          description: `The product "${data.name}" has been saved to the database.`,
         });
+        router.push('/admin/products/manage');
+      } else {
+        toast({
+          title: 'Error Creating Product',
+          description: result.error || 'There was an issue saving the product.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error during product submission process:', error);
+      toast({
+        title: 'Error Creating Product',
+        description: error.message || 'An unexpected error occurred. Please check console and server logs.',
+        variant: 'destructive',
+        duration: 10000,
+      });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 

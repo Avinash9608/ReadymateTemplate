@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -9,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Palette, Save } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 
@@ -33,7 +31,6 @@ const constructHslString = (h: string, s: string, l: string): string => {
 export default function AdminThemePage() {
   const { customColors, setCustomColors: applyCustomColors, effectiveTheme } = useTheme();
   const { toast } = useToast();
-  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   // State for HSL components
@@ -48,11 +45,17 @@ export default function AdminThemePage() {
   // More colors can be added: background, foreground
 
   useEffect(() => {
-    if (!isLoading && (!user || !user.isAdmin)) {
-      toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-      router.push('/');
-    }
-  }, [user, isLoading, router, toast]);
+    // Reset HSL input fields
+    setPrimaryH(''); setPrimaryS(''); setPrimaryL('');
+    setAccentH(''); setAccentS(''); setAccentL('');
+    // Call setCustomColors with empty object to clear custom styles from :root
+    // This will make it fall back to globals.css defaults
+    applyCustomColors({}); 
+    toast({
+      title: "Theme Reset",
+      description: "Theme has been reset to defaults.",
+    });
+  }, [applyCustomColors, toast]);
   
   useEffect(() => {
     const { h: pH, s: pS, l: pL } = parseHslString(customColors.primary);
@@ -93,10 +96,6 @@ export default function AdminThemePage() {
       description: "Theme has been reset to defaults.",
     });
   };
-
-  if (isLoading || !user || !user.isAdmin) {
-    return <div className="text-center py-10">Checking permissions...</div>;
-  }
 
   const ColorInputGroup = ({ label, h, setH, s, setS, l, setL, colorPreview }: {
     label: string,

@@ -1,63 +1,100 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSettings, type SiteSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Save, SettingsIcon, Info } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { Save, SettingsIcon, Info, UploadCloud } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function AdminSettingsPage() {
-  const { settings, setSettings, isLoading: settingsLoading } = useSettings();
   const { toast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [formData, setFormData] = useState<SiteSettings>({
+  const [formData, setFormData] = useState({
     siteName: '',
     tagline: '',
-    logoLightUrl: '',
-    logoDarkUrl: '',
+    logoLight: '',
+    logoDark: '',
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const DEFAULTS = {
+    siteName: 'FurnishVerse',
+    tagline: 'Your futuristic furniture destination.',
+    logoLight: '',
+    logoDark: '',
+  };
 
   useEffect(() => {
-    if (!authLoading && (!user || !user.isAdmin)) {
-      toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-      router.push('/');
-    }
-  }, [user, authLoading, router, toast]);
-
-  useEffect(() => {
-    if (!settingsLoading && settings) {
-      setFormData({
-        siteName: settings.siteName || '',
-        tagline: settings.tagline || '',
-        logoLightUrl: settings.logoLightUrl || '',
-        logoDarkUrl: settings.logoDarkUrl || '',
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.settings) {
+          setFormData({
+            siteName: data.settings.siteName || DEFAULTS.siteName,
+            tagline: data.settings.tagline || DEFAULTS.tagline,
+            logoLight: data.settings.logoLight || DEFAULTS.logoLight,
+            logoDark: data.settings.logoDark || DEFAULTS.logoDark,
+          });
+        } else {
+          setFormData(DEFAULTS);
+        }
+        setLoading(false);
       });
-    }
-  }, [settings, settingsLoading]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveSettings = () => {
-    setSettings(formData);
-    toast({
-      title: "Settings Updated",
-      description: "Site branding settings have been saved.",
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logoLight' | 'logoDark') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/settings/upload', {
+      method: 'POST',
+      body: formData,
     });
+    const data = await res.json();
+    if (data.success) {
+      setFormData(prev => ({ ...prev, [type]: data.url }));
+      toast({ title: 'Logo Uploaded', description: 'Logo image uploaded successfully.' });
+    } else {
+      toast({ title: 'Upload Error', description: data.error || 'Failed to upload logo.', variant: 'destructive' });
+    }
   };
 
-  if (authLoading || settingsLoading || !user || !user.isAdmin) {
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (data.success) {
+      setFormData({
+        siteName: data.settings.siteName,
+        tagline: data.settings.tagline,
+        logoLight: data.settings.logoLight,
+        logoDark: data.settings.logoDark,
+      });
+      toast({ title: 'Settings Updated', description: 'Site settings have been saved.' });
+      window.location.reload();
+    } else {
+      toast({ title: 'Error', description: data.error || 'Failed to save settings.', variant: 'destructive' });
+    }
+  };
+
+  if (loading) {
     return <div className="text-center py-10">Loading settings...</div>;
   }
 
@@ -81,7 +118,7 @@ export default function AdminSettingsPage() {
               name="siteName"
               value={formData.siteName}
               onChange={handleInputChange}
-              placeholder="e.g., FurnishVerse"
+              placeholder={DEFAULTS.siteName}
             />
           </div>
           <div className="space-y-2">
@@ -91,43 +128,35 @@ export default function AdminSettingsPage() {
               name="tagline"
               value={formData.tagline}
               onChange={handleInputChange}
-              placeholder="e.g., Your futuristic furniture destination."
-            />
-          </div>
-          
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertTitle>Logo URLs</AlertTitle>
-            <AlertDescription>
-              Please provide direct URLs to your logo images. For actual file uploads, Cloudinary integration would be a next step.
-              If a URL is not provided for a specific theme, the site name text will be displayed.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2">
-            <Label htmlFor="logoLightUrl">Logo URL (Light Theme)</Label>
-            <Input
-              id="logoLightUrl"
-              name="logoLightUrl"
-              value={formData.logoLightUrl}
-              onChange={handleInputChange}
-              placeholder="https://example.com/logo-light.png"
+              placeholder={DEFAULTS.tagline}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="logoDarkUrl">Logo URL (Dark Theme)</Label>
-            <Input
-              id="logoDarkUrl"
-              name="logoDarkUrl"
-              value={formData.logoDarkUrl}
-              onChange={handleInputChange}
-              placeholder="https://example.com/logo-dark.png"
-            />
+            <Label>Logo (Light Theme)</Label>
+            <div className="flex items-center space-x-2">
+              <Input type="file" accept="image/*" onChange={e => handleLogoUpload(e, 'logoLight')} />
+              {formData.logoLight ? (
+                <img src={formData.logoLight} alt="Logo Light" className="h-10" />
+              ) : (
+                <span className="text-xs text-muted-foreground">No logo uploaded</span>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Logo (Dark Theme)</Label>
+            <div className="flex items-center space-x-2">
+              <Input type="file" accept="image/*" onChange={e => handleLogoUpload(e, 'logoDark')} />
+              {formData.logoDark ? (
+                <img src={formData.logoDark} alt="Logo Dark" className="h-10" />
+              ) : (
+                <span className="text-xs text-muted-foreground">No logo uploaded</span>
+              )}
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-3">
-          <Button onClick={handleSaveSettings}>
-            <Save className="mr-2 h-4 w-4" /> Save Settings
+          <Button onClick={handleSaveSettings} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" /> {saving ? 'Saving...' : 'Save Settings'}
           </Button>
         </CardFooter>
       </Card>

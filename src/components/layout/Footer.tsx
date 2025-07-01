@@ -1,12 +1,12 @@
-
 "use client";
 import Link from 'next/link';
-import { useSettings } from '@/contexts/SettingsContext';
+import type { SiteSettings } from '@/contexts/SettingsContext';
 
-export default function Footer() {
-  const { settings, isLoading } = useSettings();
-  const siteName = isLoading ? "FurnishVerse" : settings.siteName || "FurnishVerse";
-  const tagline = isLoading ? "Futuristic furniture for modern living." : settings.tagline || "Futuristic furniture for modern living.";
+export default function Footer({ settings }: { settings: SiteSettings }) {
+  const metaSiteName = "FurnishVerse";
+  const metaTagline = "Your futuristic furniture destination.";
+  const siteName = settings.siteName && settings.siteName.trim() !== '' ? settings.siteName : metaSiteName;
+  const tagline = settings.tagline && settings.tagline.trim() !== '' ? settings.tagline : metaTagline;
 
   return (
     <footer className="border-t border-border/40 bg-background/95">

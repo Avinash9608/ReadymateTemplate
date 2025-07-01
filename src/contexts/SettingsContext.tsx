@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Dispatch, SetStateAction, ReactNode } from 'react';
@@ -49,7 +48,7 @@ interface SettingsContextState {
   updateNavItem: (id: string, updates: Partial<NavItem>) => void;
   removeNavItem: (id: string) => void;
   reorderNavItems: (id: string, direction: 'up' | 'down') => void;
-  addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => PageConfig; // Returns new page
+  addPage: (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>) => PageConfig | undefined;
   updatePage: (pageId: string, updates: Partial<Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   getPageBySlug: (slug: string) => PageConfig | undefined;
   getPageById: (id: string) => PageConfig | undefined;
@@ -77,7 +76,7 @@ const initialState: SettingsContextState = {
   updateNavItem: () => null,
   removeNavItem: () => null,
   reorderNavItems: () => null,
-  addPage: () => ({} as PageConfig),
+  addPage: () => undefined,
   updatePage: () => null,
   getPageBySlug: () => undefined,
   getPageById: () => undefined,
@@ -101,41 +100,26 @@ export function SettingsProvider({
 
   useEffect(() => {
     setIsLoading(true);
-    if (typeof window !== 'undefined') {
-      try {
-        const storedSettings = localStorage.getItem(storageKey);
-        if (storedSettings) {
-          const parsedSettings = JSON.parse(storedSettings);
-          // Ensure navItems and pages are initialized correctly, including component IDs and props
-          parsedSettings.navItems = (parsedSettings.navItems || defaultSettings.navItems || []).map((item: NavItem, index: number) => ({
-            ...item,
-            id: item.id || `nav-${Date.now()}-${index}`, // Ensure ID
-            order: item.order || index + 1, // Ensure order
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.settings) {
+          setSettingsState((prev) => ({
+            ...prev,
+            siteName: data.settings.siteName || defaultSettings.siteName,
+            tagline: data.settings.tagline || defaultSettings.tagline,
+            logoLightUrl: data.settings.logoLight || defaultSettings.logoLightUrl,
+            logoDarkUrl: data.settings.logoDark || defaultSettings.logoDarkUrl,
           }));
-
-          parsedSettings.pages = (parsedSettings.pages || []).map((page: PageConfig, pageIndex: number) => ({
-            ...page,
-            id: page.id || `page-${Date.now()}-${pageIndex}`, // Ensure page ID
-            suggestedLayout: (page.suggestedLayout || []).map((component: PageComponent, compIndex: number) => ({
-              ...component,
-              id: component.id || `comp-${Date.now()}-${pageIndex}-${compIndex}`, // Ensure component ID
-              props: component.props || { placeholderContent: `Content for ${component.type}` },
-            })),
-          }));
-          setSettingsState(parsedSettings);
         } else {
-          localStorage.setItem(storageKey, JSON.stringify(defaultSettings));
           setSettingsState(defaultSettings);
         }
-      } catch (e) {
-        console.error("Error reading settings from localStorage", e);
+        setIsLoading(false);
+      })
+      .catch(() => {
         setSettingsState(defaultSettings);
-        if (localStorage.getItem(storageKey)) {
-            localStorage.removeItem(storageKey);
-        }
-      }
-    }
-    setIsLoading(false);
+        setIsLoading(false);
+      });
   }, [storageKey]);
 
   useEffect(() => {
@@ -205,7 +189,17 @@ export function SettingsProvider({
     });
   };
 
-  const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): PageConfig => {
+  const addPage = (pageData: Omit<PageConfig, 'id' | 'createdAt' | 'updatedAt'>): PageConfig | undefined => {
+    console.log('addPage called with slug:', pageData.slug);
+    console.log('Current pages:', settings.pages);
+
+    // Defensive: check for duplicate slug
+    const existing = settings.pages?.find(p => p.slug === pageData.slug);
+    if (existing) {
+      console.log('Duplicate slug found:', pageData.slug);
+      return undefined;
+    }
+
     const newPageId = `page-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     const newPage: PageConfig = {
@@ -223,6 +217,7 @@ export function SettingsProvider({
       ...prev,
       pages: [...(prev.pages || []), newPage],
     }));
+    console.log('Page created:', newPage);
     return newPage;
   };
 

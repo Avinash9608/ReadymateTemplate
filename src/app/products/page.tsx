@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, Suspense, type Dispatch, type SetStateAction } from 'react';
-import { getProductsFromFirestore, getCategoriesFromFirestore, type Product } from '@/lib/products';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
@@ -16,6 +14,7 @@ import { Zap, Filter, X, Loader2, AlertTriangle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider } from '@/components/ui/sidebar';
 import { useToast } from '@/hooks/use-toast';
+import type { Product } from '@/lib/products';
 
 
 interface InitialCategoryHandlerProps {
@@ -53,15 +52,15 @@ export default function ProductsPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const [fetchedProducts, fetchedCategories] = await Promise.all([
-          getProductsFromFirestore({status: 'all', includeDraftArchived: true}), // Fetch all for admin-like filtering
-          getCategoriesFromFirestore()
+        const [fetchedProducts, fetchedCategoryNames] = await Promise.all([
+          fetch('/api/products?status=all&includeDraftArchived=true').then(res => res.json()),
+          fetch('/api/categories').then(res => res.json()),
         ]);
         setAllProducts(fetchedProducts);
-        setAllCategories(fetchedCategories);
+        setAllCategories(fetchedCategoryNames);
         
         if (fetchedProducts.length > 0) {
-          const maxPrice = Math.max(...fetchedProducts.map(p => p.price), 0); // Ensure maxPrice is at least 0
+          const maxPrice = Math.max(...fetchedProducts.map((p: Product) => p.price), 0); // Ensure maxPrice is at least 0
           setPriceRange([0, Math.ceil(Math.max(maxPrice, 50) / 50) * 50]); // Ensure slider max is reasonable
         } else {
           setPriceRange([0, 5000]); // Default if no products
@@ -135,7 +134,7 @@ export default function ProductsPage() {
         </div>
         <Slider
           min={0}
-          max={Math.max(...allProducts.map(p => p.price), 50) || 5000} // Ensure max is at least 50 or default
+          max={Math.max(...allProducts.map((p: Product) => p.price), 50) || 5000} // Ensure max is at least 50 or default
           step={50}
           value={priceRange}
           onValueChange={(value) => setPriceRange(value as [number, number])}

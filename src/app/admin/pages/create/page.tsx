@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -106,6 +105,12 @@ export default function CreatePage() {
       isPublished: data.isPublished,
     });
 
+    if (!newPage || !newPage.id) {
+      toast({ title: "Error", description: "Failed to create page.", variant: "destructive" });
+      setIsSubmitting(false);
+      return;
+    }
+
     if (data.isPublished) {
       addNavItem({
         label: newPage.title,
@@ -115,16 +120,21 @@ export default function CreatePage() {
       });
       toast({
         title: "Page Created & Published!",
-        description: `The page "${newPage.title}" has been created and added to the navbar. Redirecting to edit...`,
+        description: `The page \"${newPage.title}\" has been created and added to the navbar. Redirecting...`,
       });
     } else {
       toast({
         title: "Page Created as Draft!",
-        description: `The page "${newPage.title}" has been created as a draft. Redirecting to edit...`,
+        description: `The page \"${newPage.title}\" has been created as a draft. Redirecting...`,
       });
     }
-    
-    router.push(`/admin/pages/edit/${newPage.id}`);
+
+    // Redirect logic: if home page, go to '/', else to edit page
+    if (newPage.slug === 'home' || newPage.slug === '/') {
+      router.push('/');
+    } else {
+      router.push(`/admin/pages/edit/${newPage.id}`);
+    }
     setIsSubmitting(false);
   };
 

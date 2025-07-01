@@ -1,4 +1,3 @@
-
 import type { Metadata } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -7,18 +6,20 @@ import Footer from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { CartProvider } from '@/contexts/CartContext';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { SettingsProvider } from '@/contexts/SettingsContext'; // Added
+import { SettingsProvider } from '@/contexts/SettingsContext';
+import { getSettings } from '@/lib/getSettings';
 
 export const metadata: Metadata = {
-  title: 'FurnishVerse', // This can be dynamic later based on SettingsContext
-  description: 'Your futuristic furniture destination.', // This can be dynamic later
+  title: 'FurnishVerse',
+  description: 'Your futuristic furniture destination.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings = await getSettings();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -34,18 +35,17 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <SettingsProvider> {/* Added SettingsProvider */}
-              <CartProvider>
-                <div className="flex flex-col min-h-screen">
-                  <Header />
-                  <main className="flex-grow container mx-auto px-4 py-8">
-                    {children}
-                  </main>
-                  <Footer />
-                </div>
-                <Toaster />
-              </CartProvider>
-            </SettingsProvider> {/* Added SettingsProvider */}
+            <CartProvider>
+              <div className="flex flex-col min-h-screen">
+                <Header settings={settings} />
+                <main className="flex-grow container mx-auto px-4 py-8">
+                  {/* SettingsProvider can be used here for admin settings page only if needed */}
+                  {children}
+                </main>
+                <Footer settings={settings} />
+              </div>
+              <Toaster />
+            </CartProvider>
           </ThemeProvider>
         </AuthProvider>
       </body>

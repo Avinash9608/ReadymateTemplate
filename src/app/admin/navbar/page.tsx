@@ -10,8 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, ArrowUp, ArrowDown, LinkIcon, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { SettingsProvider } from '@/contexts/SettingsContext';
 
 type NavItemFormData = Omit<NavItem, 'id' | 'order'>;
 
@@ -162,10 +162,9 @@ function NavbarForm({
   );
 }
 
-export default function AdminNavbarPage() {
+function AdminNavbarPage() {
   const { settings, addNavItem, updateNavItem, removeNavItem, reorderNavItems, isLoading: settingsLoading } = useSettings();
   const { toast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -177,13 +176,6 @@ export default function AdminNavbarPage() {
     isVisible: true,
   });
   const [paramsProcessed, setParamsProcessed] = useState(false);
-
-  useEffect(() => {
-    if (!authLoading && (!user || !user.isAdmin)) {
-      toast({ title: "Access Denied", description: "You do not have permission to view this page.", variant: "destructive" });
-      router.push('/');
-    }
-  }, [user, authLoading, router, toast]);
 
   const handleEdit = (item: NavItem) => {
     setIsEditing(item.id);
@@ -205,7 +197,7 @@ export default function AdminNavbarPage() {
 
   const sortedNavItems = settings.navItems ? [...settings.navItems].sort((a, b) => a.order - b.order) : [];
 
-  if (authLoading || settingsLoading || !user || !user.isAdmin) {
+  if (settingsLoading) {
     return <div className="text-center py-10 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading navbar settings...</div>;
   }
   
@@ -272,5 +264,13 @@ export default function AdminNavbarPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminNavbarPageWrapper() {
+  return (
+    <SettingsProvider>
+      <AdminNavbarPage />
+    </SettingsProvider>
   );
 }

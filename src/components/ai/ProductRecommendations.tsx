@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -8,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Loader2, Zap, AlertTriangle } from 'lucide-react';
-import { getProductsFromFirestore, type Product } from '@/lib/products'; 
+import type { Product } from '@/lib/products';
 
 export default function ProductRecommendations({ initialBrowsingHistory = "viewed futuristic sofa, smart bed" }: { initialBrowsingHistory?: string }) {
   const [aiRecommendedProductNames, setAiRecommendedProductNames] = useState<string[]>([]);
@@ -36,13 +35,12 @@ export default function ProductRecommendations({ initialBrowsingHistory = "viewe
         setAiRecommendedProductNames(recommendedNames);
 
         if (recommendedNames.length > 0) {
-          // Fetch only 'new' (published and visible) products from Firestore
-          const allProducts = await getProductsFromFirestore({status: 'new'}); 
-          
+          // Fetch only 'new' (published and visible) products from the API
+          const response = await fetch('/api/products?status=new');
+          const allProducts: Product[] = await response.json();
           const matchedProducts = allProducts.filter(product => 
             recommendedNames.some(recName => product.name.toLowerCase().includes(recName))
           ).slice(0, 3); 
-          
           setDisplayableRecommendations(matchedProducts);
         } else {
           setDisplayableRecommendations([]);

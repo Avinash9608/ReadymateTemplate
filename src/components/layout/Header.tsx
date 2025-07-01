@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -7,9 +6,10 @@ import ThemeToggle from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, User, LogIn, LogOut, PackageSearch, Settings, List, FilePlus } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSettings } from '@/contexts/SettingsContext';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
+import type { SiteSettings } from '@/contexts/SettingsContext';
 
 const NavLinkInternal = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <Link href={href} passHref>
@@ -27,16 +27,21 @@ const NavLinkExternal = ({ href, children }: { href: string; children: React.Rea
   </a>
 );
 
-
-export default function Header() {
+export default function Header({ settings }: { settings: SiteSettings }) {
   const { cartItemCount } = useCart();
-  const { user, logout } = useAuth();
-  const { settings, isLoading: settingsLoading } = useSettings(); 
   const router = useRouter();
+  const { user, logout } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const metaSiteName = "FurnishVerse";
+  const metaTagline = "Your futuristic furniture destination.";
+  const siteName = settings.siteName && settings.siteName.trim() !== '' ? settings.siteName : metaSiteName;
+  const tagline = settings.tagline && settings.tagline.trim() !== '' ? settings.tagline : metaTagline;
 
   const handleLogout = () => {
     logout();
-    router.push('/');
+    setDropdownOpen(false);
+    router.push('/auth');
   };
 
   const visibleNavItems = settings.navItems
@@ -46,25 +51,21 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 flex h-16 max-w-screen-2xl items-center justify-between">
-        <Logo />
+        <div className="flex flex-col justify-center">
+          <Logo settings={settings} />
+          <span className="text-xs text-muted-foreground leading-tight hidden sm:block">{tagline}</span>
+        </div>
         <nav className="hidden md:flex items-center space-x-2 lg:space-x-4">
-          {settingsLoading ? (
-            <>
-              <Button variant="ghost" className="animate-pulse w-20 h-8 bg-muted"></Button>
-              <Button variant="ghost" className="animate-pulse w-20 h-8 bg-muted"></Button>
-            </>
-          ) : (
-            visibleNavItems.map(item => 
-              item.type === 'internal' && item.slug ? (
-                <NavLinkInternal key={item.id} href={item.slug}>
-                  {item.label}
-                </NavLinkInternal>
-              ) : item.type === 'external' && item.externalUrl ? (
-                <NavLinkExternal key={item.id} href={item.externalUrl}>
-                  {item.label}
-                </NavLinkExternal>
-              ) : null
-            )
+          {visibleNavItems.map(item => 
+            item.type === 'internal' && item.slug ? (
+              <NavLinkInternal key={item.id} href={item.slug}>
+                {item.label}
+              </NavLinkInternal>
+            ) : item.type === 'external' && item.externalUrl ? (
+              <NavLinkExternal key={item.id} href={item.externalUrl}>
+                {item.label}
+              </NavLinkExternal>
+            ) : null
           )}
         </nav>
         <div className="flex items-center space-x-1 sm:space-x-2">
@@ -79,48 +80,24 @@ export default function Header() {
               )}
             </Button>
           </Link>
-          {user ? (
-            <>
-              <Link href="/profile" passHref>
-                <Button variant="ghost" size="icon" aria-label="User Profile">
-                  <User className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout">
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </>
-          ) : (
-            <Link href="/login" passHref>
-              <Button variant="ghost" aria-label="Login">
-                <LogIn className="h-5 w-5 mr-2" /> Login
-              </Button>
+          {!user ? (
+            <Link href="/auth">
+              <Button variant="outline">Login</Button>
             </Link>
-          )}
-           {user?.isAdmin && (
-            <div className="hidden sm:flex items-center space-x-1">
-               <Link href="/admin/navbar" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Navbar Settings">
-                  <List className="h-4 w-4" /> 
-                </Button>
-              </Link>
-              <Link href="/admin/pages/create" passHref>
-                <Button variant="outline" size="sm" aria-label="Create New Page">
-                    <FilePlus className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/admin/theme" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Theme Settings">
-                  <PackageSearch className="h-4 w-4" /> 
-                </Button>
-              </Link>
-               <Link href="/admin/settings" passHref>
-                <Button variant="outline" size="sm" aria-label="Admin Site Settings">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </Link>
+          ) : (
+            <div className="relative">
+              <Button variant="ghost" onClick={() => setDropdownOpen((v) => !v)}>
+                {user.name}
+              </Button>
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-lg z-50">
+                  <Button variant="outline" className="w-full" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </div>
+              )}
             </div>
-           )}
+          )}
         </div>
       </div>
     </header>

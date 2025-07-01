@@ -20,7 +20,7 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function ProfilePage() {
-  const { user, isLoading: authLoading } = useAuth(); // Consider exposing an updateProfile function from AuthContext
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -49,6 +49,7 @@ export default function ProfilePage() {
     // For this mock, we'll just show a toast
     toast({
       title: "Profile Updated",
+      
       description: "Your profile information has been (mock) updated.",
     });
     setIsUpdating(false);
